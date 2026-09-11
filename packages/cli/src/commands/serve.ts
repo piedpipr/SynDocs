@@ -280,10 +280,8 @@ export async function runServe(opts: ServeOptions): Promise<void> {
 
     // ── Main HTML Page ────────────────────────────────────────────────────
     if (pathname === '/' || pathname === '/index.html') {
-      const page = HTML_TEMPLATE.replace(
-        '__SYNDOCS_DATA__',
-        JSON.stringify(data).replace(/</g, '\\u003c'),
-      );
+      const jsonSafe = JSON.stringify(data).replace(/<\/script/gi, '<\\/script');
+      const page = HTML_TEMPLATE.replace('__SYNDOCS_DATA__', () => jsonSafe);
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(page);
       return;

@@ -1659,10 +1659,11 @@ code, kbd, samp, pre {
   </aside>
 </div>
 
+<script id="syndocs-data" type="application/json">__SYNDOCS_DATA__</script>
 <script>
 // ═══════════════════════════════════════════════════════════════════════════════
 // Data injected by server
-const DATA = __SYNDOCS_DATA__;
+const DATA = JSON.parse(document.getElementById('syndocs-data').textContent);
 
 // ─── Global State ─────────────────────────────────────────────────────────────
 let currentDocId = null;
@@ -1705,9 +1706,16 @@ document.addEventListener('DOMContentLoaded', () => {
   setupWindowResize();
   setupGlobalClickClose();
 
-  const hasRepoDocs = DATA.nodes.some(n => n.type === 'doc');
-  if (!hasRepoDocs && DATA.docs['guides/internal/quickstart.md']) {
-    openDoc('guides/internal/quickstart.md');
+  const lastDoc = localStorage.getItem('syndocs_last_doc');
+  if (lastDoc && DATA.docs[lastDoc]) {
+    openDoc(lastDoc);
+  } else {
+    const firstDoc = DATA.nodes.find(n => n.type === 'doc');
+    if (firstDoc && DATA.docs[firstDoc.id]) {
+      openDoc(firstDoc.id);
+    } else if (DATA.docs['guides/internal/quickstart.md']) {
+      openDoc('guides/internal/quickstart.md');
+    }
   }
 });
 
@@ -2022,6 +2030,7 @@ function collapseAllTree() {
 
 function openDoc(id) {
   currentDocId = id;
+  if (id) localStorage.setItem('syndocs_last_doc', id);
   const doc = DATA.docs[id];
 
   document.querySelectorAll('.tree-row').forEach(r => {
