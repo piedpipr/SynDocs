@@ -24,16 +24,32 @@ import {
   loadGraphAdapter,
 } from '../utils';
 import { execSync } from 'child_process';
+import readline from 'readline';
+
+function askPrompt(question: string): Promise<string> {
+  return new Promise(resolve => {
+    if (!process.stdin.isTTY) return resolve('');
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+    rl.question(question, answer => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
+}
 
 export interface InitOptions {
   cwd: string;
   config: SynDocsConfig;
   dryRun?: boolean;
   skipCodegraph?: boolean;
+  accessCode?: string;
 }
 
 export async function runInit(opts: InitOptions): Promise<void> {
-  const { cwd, config, dryRun, skipCodegraph } = opts;
+  const { cwd, config, dryRun, skipCodegraph, accessCode } = opts;
 
   console.log(c.bold('SynDocs — init\n'));
   if (dryRun) console.log(c.yellow('  dry-run mode: no files will be written\n'));
@@ -52,14 +68,19 @@ export async function runInit(opts: InitOptions): Promise<void> {
     }
 
     const authFile = path.join(cwd, '.syndocs', 'auth.json');
-    if (!fs.existsSync(authFile)) {
-      const { hash, salt } = hashPassword('syndocs');
+    if (!fs.existsSync(authFile) || accessCode) {
+      let codeToUse = accessCode;
+      if (!codeToUse && process.stdin.isTTY) {
+        codeToUse = await askPrompt('  Enter access code for Web UI editing [default: syndocs]: ');
+      }
+      if (!codeToUse) codeToUse = 'syndocs';
+      const { hash, salt } = hashPassword(codeToUse);
       fs.writeFileSync(
         authFile,
         JSON.stringify({ hash, salt, createdAt: new Date().toISOString() }, null, 2) + '\n',
         'utf8',
       );
-      console.log('  ' + c.green('+ created') + '   .syndocs/auth.json ' + c.dim('(default code: "syndocs" — change with `syndocs auth`)'));
+      console.log('  ' + c.green('+ configured') + ' .syndocs/auth.json ' + c.dim(`(edit access code: "${codeToUse}")`));
     }
   }
 

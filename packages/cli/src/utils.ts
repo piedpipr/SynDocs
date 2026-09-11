@@ -163,7 +163,7 @@ export function parseCliArgs(argv: string[]): ParsedArgs {
   const targets: string[] = [];
   let command = '';
 
-  const optionsWithArgs = new Set(['--cwd', '--port', '-p']);
+  const optionsWithArgs = new Set(['--cwd', '--port', '-p', '--access-code', '-a']);
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -203,10 +203,13 @@ export function parseCliArgs(argv: string[]): ParsedArgs {
       const next = argv[++i];
       if (arg === '--cwd') flags.cwd = next;
       else if (arg === '--port' || arg === '-p') flags.port = parseInt(next, 10);
+      else if (arg === '--access-code' || arg === '-a') flags.accessCode = next;
     } else if (arg.startsWith('--cwd=')) {
       flags.cwd = arg.slice(6);
     } else if (arg.startsWith('--port=')) {
       flags.port = parseInt(arg.slice(7), 10);
+    } else if (arg.startsWith('--access-code=')) {
+      flags.accessCode = arg.slice(14);
     } else if (!arg.startsWith('-')) {
       targets.push(arg);
     }

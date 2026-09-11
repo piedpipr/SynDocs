@@ -20,8 +20,9 @@ ${c.bold('SynDocs')} v${VERSION} — code-synced documentation with graph connec
 
 ${c.bold('Usage:')}
 
-  syndocs init [--dry-run] [--skip-codegraph]
+  syndocs init [access-code] [--access-code <code>] [--dry-run] [--skip-codegraph]
     One-time initialization for a repository.
+    Prompts for web UI edit access code (or pass directly).
     Creates .syndocs/ structure (docs, microdocs, guides) and initial documentation.
     Runs codegraph init automatically if CodeGraph is installed.
 
@@ -104,6 +105,7 @@ async function main(): Promise<void> {
         config,
         dryRun: parsed.flags.dryRun,
         skipCodegraph: parsed.flags.skipCodegraph,
+        accessCode: parsed.flags.accessCode || (parsed.targets.length > 0 ? parsed.targets[0] : undefined),
       });
       break;
     }
