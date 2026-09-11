@@ -199,6 +199,8 @@ export function parseCliArgs(argv: string[]): ParsedArgs {
       flags.stale = true;
     } else if (arg === '--orphans') {
       flags.orphans = true;
+    } else if (arg === '--self') {
+      flags.self = true;
     } else if (optionsWithArgs.has(arg)) {
       const next = argv[++i];
       if (arg === '--cwd') flags.cwd = next;
