@@ -1,10 +1,9 @@
 # anchor-parser.ts
-<!-- syndocs-hash: 1dcc510e691c -->
+<!-- syndocs-hash: 1e76bd81ee61 -->
 
 ```ts
 // @syndocs
-import type { LanguageConfig, ParsedAnchor } from './types';
-import { buildAnchorRegex, buildInlineAnchorRegex } from './languages';
+import type { CommentStyle, LanguageConfig, ParsedAnchor } from './types';
 import { toKebabSlug, generateUniqueSlug } from './slug';
 
 // ─── Declaration detection patterns (for structural fallback) ─────────────────
@@ -60,14 +59,58 @@ const SINGLE_LINE_KINDS = new Set(['variable', 'field', 'constant']);
  *  - Inline @synd at end of a code line scopes to that line or block.
  *  - All micro-docs are embedded as sections within the parent mirror doc.
  */
+/**
+ * Locate a comment on `line` that is NOT inside a string literal.
+ * Skips comment markers that occur inside single quotes, double quotes, or backticks.
+ */
+function findRealComment(
+  line: string,
+  style: CommentStyle,
+  closeStyle?: string,
+): { isFullLine: boolean; commentText: string } | null {
+  let inQuote: string | null = null;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuote) {
+      if (ch === '\\\\') {
+        i++; // skip escaped char
+        continue;
+      }
+      if (ch === inQuote) {
+        inQuote = null;
+      }
+      continue;
+    }
+
+    if (ch === '"' || ch === "'" || ch === '`') {
+      inQuote = ch;
+      continue;
+    }
+
+    if (line.startsWith(style, i)) {
+      const before = line.slice(0, i);
+      let commentText = line.slice(i + style.length);
+      if (closeStyle) {
+        const closeIdx = commentText.indexOf(closeStyle);
+        if (closeIdx !== -1) {
+          commentText = commentText.slice(0, closeIdx);
+        }
+      }
+      return {
+        isFullLine: before.trim().length === 0,
+        commentText,
+      };
+    }
+  }
+  return null;
+}
+
 // @synd: parse-anchors
 export function parseAnchors(
   content: string,
   langConfig: LanguageConfig,
 ): ParsedAnchor[] {
   const lines = content.split('\n');
-  const lineRe   = buildAnchorRegex(langConfig.style);
-  const inlineRe = buildInlineAnchorRegex(langConfig.style);
   const anchors: ParsedAnchor[] = [];
   const seenLabels = new Set<string>();
   let hasWholeFile = false;
@@ -75,11 +118,16 @@ export function parseAnchors(
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
-    // ── 1. Check for full-line annotation (comment-only line) ──────────
-    const lineMatch = line.match(lineRe);
-    if (lineMatch) {
-      const rawLabel = lineMatch[1]; // may be undefined
+    const commentInfo = findRealComment(line, langConfig.style, langConfig.closeStyle);
+    if (!commentInfo) continue;
 
+    const anchorMatch = commentInfo.commentText.match(/^\s*@(?:syndocs|synd)(?:\s*:\s*(\S+))?/);
+    if (!anchorMatch) continue;
+
+    const rawLabel = anchorMatch[1]; // may be undefined
+
+    // ── 1. Full-line annotation (comment-only line) ───────────────────
+    if (commentInfo.isFullLine) {
       if (!rawLabel) {
         // Bare annotation — whole-file if first & near top, otherwise auto-scoped micro
         if (!hasWholeFile && isHeaderArea(lines, i)) {
@@ -119,41 +167,36 @@ export function parseAnchors(
       continue;
     }
 
-    // ── 2. Check for inline (trailing) annotation ──────────────────────
-    const inlineMatch = line.match(inlineRe);
-    if (inlineMatch) {
-      const rawLabel = inlineMatch[1];
+    // ── 2. Inline (trailing) annotation ───────────────────────────────
+    if (!rawLabel) {
+      // Inline bare: scope to the current line's code element
+      const scope = resolveScopeBoundaries(lines, i, true);
+      const slug = scope
+        ? generateUniqueSlug(toKebabSlug(scope.name), seenLabels)
+        : generateUniqueSlug(`line-L${i + 1}`, seenLabels);
 
-      if (!rawLabel) {
-        // Inline bare: scope to the current line's code element
-        const scope = resolveScopeBoundaries(lines, i, true);
-        const slug = scope
-          ? generateUniqueSlug(toKebabSlug(scope.name), seenLabels)
-          : generateUniqueSlug(`line-L${i + 1}`, seenLabels);
-
-        seenLabels.add(slug);
-        anchors.push({
-          kind: 'micro',
-          label: slug,
-          lineIndex: i,
-          autoScoped: true,
-          inline: true,
-          elementKind: scope?.kind,
-          elementName: scope?.name,
-          scopeStartLine: scope?.startLine,
-          scopeEndLine: scope?.endLine,
-        });
-      } else {
-        const label = rawLabel.trim();
-        if (seenLabels.has(label)) {
-          process.stderr.write(
-            `[syndocs] Warning: duplicate label "@synd: ${label}" in file — skipping extra\n`,
-          );
-          continue;
-        }
-        seenLabels.add(label);
-        anchors.push({ kind: 'micro', label, lineIndex: i, inline: true });
+      seenLabels.add(slug);
+      anchors.push({
+        kind: 'micro',
+        label: slug,
+        lineIndex: i,
+        autoScoped: true,
+        inline: true,
+        elementKind: scope?.kind,
+        elementName: scope?.name,
+        scopeStartLine: scope?.startLine,
+        scopeEndLine: scope?.endLine,
+      });
+    } else {
+      const label = rawLabel.trim();
+      if (seenLabels.has(label)) {
+        process.stderr.write(
+          `[syndocs] Warning: duplicate label "@synd: ${label}" in file — skipping extra\n`,
+        );
+        continue;
       }
+      seenLabels.add(label);
+      anchors.push({ kind: 'micro', label, lineIndex: i, inline: true });
     }
   }
 
@@ -363,7 +406,7 @@ function findBlockEnd(lines: string[], startLine: number): number {
 ---
 
 ## @synd: parse-anchors
-<!-- syndocs-hash: 3cdbf11fc275 -->
+<!-- syndocs-hash: 0d77c39f959a -->
 
 ```ts
 export function parseAnchors(
@@ -371,8 +414,6 @@ export function parseAnchors(
   langConfig: LanguageConfig,
 ): ParsedAnchor[] {
   const lines = content.split('\n');
-  const lineRe   = buildAnchorRegex(langConfig.style);
-  const inlineRe = buildInlineAnchorRegex(langConfig.style);
   const anchors: ParsedAnchor[] = [];
   const seenLabels = new Set<string>();
   let hasWholeFile = false;
@@ -380,11 +421,16 @@ export function parseAnchors(
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
-    // ── 1. Check for full-line annotation (comment-only line) ──────────
-    const lineMatch = line.match(lineRe);
-    if (lineMatch) {
-      const rawLabel = lineMatch[1]; // may be undefined
+    const commentInfo = findRealComment(line, langConfig.style, langConfig.closeStyle);
+    if (!commentInfo) continue;
 
+    const anchorMatch = commentInfo.commentText.match(/^\s*@(?:syndocs|synd)(?:\s*:\s*(\S+))?/);
+    if (!anchorMatch) continue;
+
+    const rawLabel = anchorMatch[1]; // may be undefined
+
+    // ── 1. Full-line annotation (comment-only line) ───────────────────
+    if (commentInfo.isFullLine) {
       if (!rawLabel) {
         // Bare annotation — whole-file if first & near top, otherwise auto-scoped micro
         if (!hasWholeFile && isHeaderArea(lines, i)) {
@@ -424,41 +470,36 @@ export function parseAnchors(
       continue;
     }
 
-    // ── 2. Check for inline (trailing) annotation ──────────────────────
-    const inlineMatch = line.match(inlineRe);
-    if (inlineMatch) {
-      const rawLabel = inlineMatch[1];
+    // ── 2. Inline (trailing) annotation ───────────────────────────────
+    if (!rawLabel) {
+      // Inline bare: scope to the current line's code element
+      const scope = resolveScopeBoundaries(lines, i, true);
+      const slug = scope
+        ? generateUniqueSlug(toKebabSlug(scope.name), seenLabels)
+        : generateUniqueSlug(`line-L${i + 1}`, seenLabels);
 
-      if (!rawLabel) {
-        // Inline bare: scope to the current line's code element
-        const scope = resolveScopeBoundaries(lines, i, true);
-        const slug = scope
-          ? generateUniqueSlug(toKebabSlug(scope.name), seenLabels)
-          : generateUniqueSlug(`line-L${i + 1}`, seenLabels);
-
-        seenLabels.add(slug);
-        anchors.push({
-          kind: 'micro',
-          label: slug,
-          lineIndex: i,
-          autoScoped: true,
-          inline: true,
-          elementKind: scope?.kind,
-          elementName: scope?.name,
-          scopeStartLine: scope?.startLine,
-          scopeEndLine: scope?.endLine,
-        });
-      } else {
-        const label = rawLabel.trim();
-        if (seenLabels.has(label)) {
-          process.stderr.write(
-            `[syndocs] Warning: duplicate label "@synd: ${label}" in file — skipping extra\n`,
-          );
-          continue;
-        }
-        seenLabels.add(label);
-        anchors.push({ kind: 'micro', label, lineIndex: i, inline: true });
+      seenLabels.add(slug);
+      anchors.push({
+        kind: 'micro',
+        label: slug,
+        lineIndex: i,
+        autoScoped: true,
+        inline: true,
+        elementKind: scope?.kind,
+        elementName: scope?.name,
+        scopeStartLine: scope?.startLine,
+        scopeEndLine: scope?.endLine,
+      });
+    } else {
+      const label = rawLabel.trim();
+      if (seenLabels.has(label)) {
+        process.stderr.write(
+          `[syndocs] Warning: duplicate label "@synd: ${label}" in file — skipping extra\n`,
+        );
+        continue;
       }
+      seenLabels.add(label);
+      anchors.push({ kind: 'micro', label, lineIndex: i, inline: true });
     }
   }
 

@@ -1,5 +1,5 @@
 # init.ts
-<!-- syndocs-hash: 99708baba54d -->
+<!-- syndocs-hash: 77149dacb646 -->
 
 ```ts
 // @syndocs
@@ -52,6 +52,7 @@ export interface InitOptions {
   accessCode?: string;
 }
 
+// @synd: run-init
 export async function runInit(opts: InitOptions): Promise<void> {
   const { cwd, config, dryRun, skipCodegraph, accessCode } = opts;
 
@@ -217,45 +218,195 @@ Run \`syndocs lint-embeds\` to validate all embed references!
 
 ## Notes
 
-> _Add documentation notes here._
+The `init` command sets up SynDocs in an existing codebase. It performs one-time project scaffolding:
+
+1. **Scaffolding Directories**: Creates `.syndocs/docs`, `.syndocs/guides`, and a default `syndocs.config.json` file.
+2. **Access Code Configuration**: Prompts the user for a Web UI edit password (or accepts `--access-code <code>`), storing a salted SHA-256 hash in `.syndocs/auth.json`.
+3. **Mirror Doc Generation**: Recursively discovers source files marked with `@syndocs` or `@synd` anchors, extracting AST-exact code blocks and generating mirror markdown files.
+4. **CodeGraph Integration**: Initializes a local SQLite CodeGraph index (`.codegraph/codegraph.db`) to enable symbol connections, blast radius analysis, and Obsidian wiki-links.
 
 ---
 
-## @synd: log
-> 🔍 method · `log` · lines 167–167
-<!-- syndocs-hash: 9353c5511b6e -->
+## @synd: run-init
+<!-- syndocs-hash: 84341b204ae2 -->
 
 ```ts
-console.log('    // @synd              \u2190 whole-file (JS/TS/PHP/Go/\u2026)');
+export async function runInit(opts: InitOptions): Promise<void> {
+  const { cwd, config, dryRun, skipCodegraph, accessCode } = opts;
+
+  console.log(c.bold('SynDocs — init\n'));
+  if (dryRun) console.log(c.yellow('  dry-run mode: no files will be written\n'));
+
+  // Ensure directory structure exists
+  if (!dryRun) {
+    const guidesDir = path.join(cwd, config.guidesRoot);
+    ensureDir(guidesDir);
+    const sampleGuide = path.join(guidesDir, 'architecture.md');
+    if (!fs.existsSync(sampleGuide) && fs.readdirSync(guidesDir).length === 0) {
+      const guideContent = `# Architecture & Composed Guide
+
+This is a composed documentation guide. Unlike mirror docs, guides are narrative documents that explain high-level system architecture and workflows.
+
+You can embed code directly from your mirror docs and micro-docs using the \`@synd-embed:\` directive:
+
+<!-- Example:
+@synd-embed: src/index.ts
+@synd-embed: src/index.ts#my-label
+-->
+
+Run \`syndocs lint-embeds\` to validate all embed references!
+`;
+      fs.writeFileSync(sampleGuide, guideContent, 'utf8');
+      console.log('  ' + c.green('+ created') + '   ' + path.relative(cwd, sampleGuide));
+    }
+
+    const cfgPath = path.join(cwd, 'syndocs.config.json');
+    if (!fs.existsSync(cfgPath)) {
+      const defaultJson = JSON.stringify(config, null, 2) + '\n';
+      fs.writeFileSync(cfgPath, defaultJson, 'utf8');
+      console.log('  ' + c.green('+ created') + '   syndocs.config.json');
+    }
+
+    const authFile = path.join(cwd, '.syndocs', 'auth.json');
+    if (!fs.existsSync(authFile) || accessCode) {
+      let codeToUse = accessCode;
+      if (!codeToUse && process.stdin.isTTY) {
+        codeToUse = await askPrompt('  Enter access code for Web UI editing [default: syndocs]: ');
+      }
+      if (!codeToUse) codeToUse = 'syndocs';
+      const { hash, salt } = hashPassword(codeToUse);
+      fs.writeFileSync(
+        authFile,
+        JSON.stringify({ hash, salt, createdAt: new Date().toISOString() }, null, 2) + '\n',
+        'utf8',
+      );
+      console.log('  ' + c.green('+ configured') + ' .syndocs/auth.json ' + c.dim(`(edit access code: "${codeToUse}")`));
+    }
+  }
+
+  // Load graph adapter for AST-exact micro-doc boundaries
+  const adapter: GraphAdapter = await loadGraphAdapter(cwd);
+
+  // ── 1. Create docs & micro-docs ─────────────────────────────────────────────
+
+  let docsCreated = 0, skipped = 0, found = 0;
+
+  for (const relPath of walkSourceFiles(cwd, config)) {
+    const absPath = path.join(cwd, relPath);
+    const content = readFileSafe(absPath);
+    if (!content) continue;
+
+    const langConfig = getLangConfig(relPath);
+    if (!langConfig) continue;
+
+    const anchors = parseAnchors(content, langConfig);
+    if (anchors.length === 0) continue;
+
+    found++;
+
+    const currentHash = computeHash(content);
+    const lang = getCodeBlockLang(relPath);
+
+    const mirrorRel = getMirrorPath(relPath, config.docsRoot);
+    const mirrorAbs = path.join(cwd, mirrorRel);
+
+    if (fs.existsSync(mirrorAbs)) {
+      skipped++;
+      continue;
+    }
+
+    // Build micro-doc sections
+    const microSections: DocSection[] = [];
+    const microAnchors = anchors.filter(a => a.kind === 'micro' && a.label);
+    
+    for (const anchor of microAnchors) {
+      // Scope resolution with GraphAdapter if CodeGraph active
+      if (adapter && anchor.autoScoped && anchor.scopeStartLine === undefined) {
+         const boundary = adapter.getNextNode(absPath, anchor.lineIndex + 1);
+         if (boundary) {
+           anchor.scopeStartLine = boundary.startLine - 1;
+           anchor.scopeEndLine = boundary.endLine;
+         }
+      }
+
+      const nextAnchor = anchors.find(a => a.lineIndex > anchor.lineIndex);
+      const microCode = extractMicroDocCode(content, anchor, nextAnchor?.lineIndex);
+      const microHash = computeHash(microCode);
+
+      microSections.push({
+        kind: 'micro',
+        label: anchor.label!,
+        hash: microHash,
+        codeCopy: microCode,
+        codeLanguage: lang,
+        notes: '',
+        elementKind: anchor.elementKind,
+        elementName: anchor.elementName,
+        scopeStartLine: anchor.scopeStartLine,
+        scopeEndLine: anchor.scopeEndLine,
+      });
+    }
+
+    const docContent = renderNewMirrorDoc(relPath, content, lang, currentHash, microSections);
+    if (!dryRun) writeFile(mirrorAbs, docContent);
+    console.log('  ' + c.green('+ created') + '   ' + relPath + '  \u2192  ' + c.cyan(mirrorRel));
+    docsCreated++;
+  }
+
+  adapter?.close();
+
+  console.log('');
+  console.log(
+    '  ' + c.bold('Summary:') + '  '
+    + c.green(String(docsCreated)) + ' mirror docs created, '
+    + c.dim(String(skipped)) + ' already existed',
+  );
+
+  if (found === 0) {
+    console.log('');
+    console.log(c.yellow('  No @synd or @syndocs markers found.') + ' Add one to a source file:\n');
+    console.log('    // @synd              \u2190 whole-file (JS/TS/PHP/Go/\u2026)');
+    console.log('    # @synd               \u2190 whole-file (Python/Ruby/YAML/\u2026)');
+    console.log('    // @synd: my-label    \u2190 micro-doc for a specific block');
+    console.log('    const X = 1; // @synd \u2190 micro-doc for single line scoped block');
+  }
+
+  // ── 2. CodeGraph index ──────────────────────────────────────────────────────
+
+  if (skipCodegraph || dryRun) return;
+
+  const cgDb = path.join(cwd, '.codegraph', 'codegraph.db');
+  if (fs.existsSync(cgDb)) {
+    console.log('\n  ' + c.dim('CodeGraph index already exists — skipping codegraph init'));
+    return;
+  }
+
+  console.log('\n  ' + c.bold('CodeGraph') + '  initialising code graph\u2026');
+
+  try {
+    execSync('codegraph init --yes', { cwd, stdio: 'inherit' });
+    console.log('  ' + c.green('\u2713') + '  CodeGraph index built — run ' + c.cyan('syndocs graph-link') + ' to wire wiki-links');
+  } catch {
+    console.log('  ' + c.yellow('\u26a0') + '  codegraph not found or failed.');
+    console.log('       ' + c.cyan('npm i -g @colbymchenry/codegraph') + '  then re-run ' + c.cyan('syndocs init'));
+    console.log('  Core drift-detection works without it; graph-link and blast-radius need it.');
+  }
+}
 ```
 
 ### Notes
 
-> _Add documentation notes here._
+`runInit` is the primary entrypoint for the `syndocs init` CLI command.
 
----
+- **Options (`InitOptions`)**:
+  - `cwd`: Target directory to initialize.
+  - `config`: Configuration options including `docsRoot`, `guidesRoot`, and ignore patterns.
+  - `accessCode`: Optional password to unlock Web UI note editing.
+  - `dryRun`: When true, outputs planned file creations without writing to disk.
+  - `skipCodegraph`: Skips invocation of `codegraph init`.
 
-## @synd: my-label
-<!-- syndocs-hash: 01ba4719c80b -->
-
-```ts
-
-```
-
-### Notes
-
-> _Add documentation notes here._
-
----
-
-## @synd: x
-> 🔍 variable · `X` · lines 170–170
-<!-- syndocs-hash: 6088a0185746 -->
-
-```ts
-console.log('    const X = 1; // @synd \u2190 micro-doc for single line scoped block');
-```
-
-### Notes
-
-> _Add documentation notes here._
+- **Workflow**:
+  - Validates and creates required directories (`ensureDir`).
+  - Creates a starter guide at `.syndocs/guides/architecture.md` demonstrating `@synd-embed:` directives.
+  - Uses `walkSourceFiles` and `parseAnchors` to scan codebase files for annotations.
+  - Generates mirror documentation using `renderNewMirrorDoc`.

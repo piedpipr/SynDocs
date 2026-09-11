@@ -121,17 +121,3 @@ export function buildEmbedRegex(style: CommentStyle): RegExp {
 ## Notes
 
 > _Add documentation notes here._
-
----
-
-## @synd: x
-> 🔍 variable · `X` · lines 85–85
-<!-- syndocs-hash: 4e800ac9d930 -->
-
-```ts
-* These appear after code on the same line: `const X = 1; // @synd`
-```
-
-### Notes
-
-> _Add documentation notes here._

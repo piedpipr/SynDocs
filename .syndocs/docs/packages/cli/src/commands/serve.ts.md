@@ -1,5 +1,5 @@
 # serve.ts
-<!-- syndocs-hash: d38bf658fe41 -->
+<!-- syndocs-hash: da5771fb5cf5 -->
 
 ```ts
 // @syndocs
@@ -95,6 +95,10 @@ export interface DocEntry {
     targetSymbol: string | null;
   }[];
   downstream: string[];
+  elementKind?: string;
+  elementName?: string;
+  scopeStartLine?: number;
+  scopeEndLine?: number;
 }
 
 export interface TreeNode {
@@ -148,6 +152,8 @@ export async function runServe(opts: ServeOptions): Promise<void> {
       buildData(cwd, config).then(d => {
         data = d;
         broadcast('reload');
+      }).catch(err => {
+        console.error('[syndocs serve] Watch rebuild error:', err?.message || err);
       });
     });
   }
@@ -250,6 +256,29 @@ export async function runServe(opts: ServeOptions): Promise<void> {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ ok: false, error: 'Failed to update document notes' }));
       }
+      return;
+    }
+
+    // ── Static Fonts endpoint ─────────────────────────────────────────────
+    if (pathname.startsWith('/fonts/')) {
+      const fontFilename = path.basename(pathname);
+      const candidatePaths = [
+        path.join(cwd, '.syndocs', 'fonts', fontFilename),
+        path.resolve(__dirname, '..', '..', 'assets', 'fonts', fontFilename),
+        path.resolve(__dirname, '..', 'assets', 'fonts', fontFilename),
+      ];
+      for (const p of candidatePaths) {
+        if (fs.existsSync(p)) {
+          res.writeHead(200, {
+            'Content-Type': 'font/woff2',
+            'Cache-Control': 'public, max-age=31536000, immutable',
+          });
+          fs.createReadStream(p).pipe(res);
+          return;
+        }
+      }
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('Font not found');
       return;
     }
 
@@ -436,6 +465,10 @@ async function buildData(cwd: string, config: SynDocsConfig): Promise<SynDocsDat
         codeCopy: microSection.codeCopy ?? '',
         codeLanguage: microSection.codeLanguage ?? 'ts',
         notes: microSection.notes ?? '',
+        elementKind: microSection.elementKind,
+        elementName: microSection.elementName,
+        scopeStartLine: microSection.scopeStartLine,
+        scopeEndLine: microSection.scopeEndLine,
         tokens: [],
         downstream: [],
       };

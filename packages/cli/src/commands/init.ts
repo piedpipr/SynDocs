@@ -48,6 +48,7 @@ export interface InitOptions {
   accessCode?: string;
 }
 
+// @synd: run-init
 export async function runInit(opts: InitOptions): Promise<void> {
   const { cwd, config, dryRun, skipCodegraph, accessCode } = opts;
 

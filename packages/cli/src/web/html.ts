@@ -21,7 +21,7 @@ export const HTML_TEMPLATE = `<!DOCTYPE html>
 <title>SynDocs — Code-Synced Documentation Studio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&family=Geist:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
@@ -167,15 +167,115 @@ export const HTML_TEMPLATE = `<!DOCTYPE html>
   --shadow: 0 8px 32px rgba(0,0,0,0.12);
 }
 
+/* ─── Font Families & Palettes ───────────────────────────────────────────── */
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/jetbrains-mono-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/jetbrains-mono-600.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('/fonts/inter-600.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Fira Code';
+  src: url('/fonts/fira-code-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Fira Code';
+  src: url('/fonts/fira-code-600.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist Sans';
+  src: url('/fonts/geist-sans-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('/fonts/geist-mono-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Newsreader';
+  src: url('/fonts/newsreader-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root,
+[data-font="modern"] {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+  --font-serif: 'Newsreader', 'Charter', 'Merriweather', Georgia, serif;
+}
+[data-font="apple"] {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "SF Pro", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: "SF Mono", Monaco, Menlo, "Courier New", monospace;
+  --font-serif: "New York", "Charter", "Palatino", Georgia, serif;
+}
+[data-font="nerd"] {
+  --font-sans: "JetBrainsMono Nerd Font", "FiraCode Nerd Font", "MesloLGS NF", "Hack Nerd Font", 'Inter', system-ui, sans-serif;
+  --font-mono: "JetBrainsMono Nerd Font", "FiraCode Nerd Font", "MesloLGS NF", "Hack Nerd Font", "CaskaydiaCove Nerd Font", 'JetBrains Mono', 'Fira Code', monospace;
+  --font-serif: "JetBrainsMono Nerd Font", serif;
+}
+[data-font="geist"] {
+  --font-sans: 'Geist Sans', 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', 'JetBrains Mono', 'Fira Code', monospace;
+  --font-serif: 'Newsreader', Georgia, serif;
+}
+[data-font="editorial"] {
+  --font-sans: 'Newsreader', 'Charter', 'Merriweather', Georgia, serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+  --font-serif: 'Newsreader', 'Charter', serif;
+}
+
 /* ─── Base ─────────────────────────────────────────────────────────────────── */
 html, body {
   height: 100%;
   overflow: hidden;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--font-sans);
   font-size: 13.5px;
   background: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
+}
+code, kbd, samp, pre {
+  font-family: var(--font-mono);
+}
+[data-font="editorial"] .markdown-rendered {
+  font-family: var(--font-serif);
+  font-size: 14.5px;
+  line-height: 1.75;
 }
 
 /* ─── App Layout ───────────────────────────────────────────────────────────── */
@@ -333,6 +433,41 @@ html, body {
   border: 1px solid rgba(255,255,255,0.15);
 }
 
+/* Font picker */
+#font-picker-wrapper { position: relative; }
+#font-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px;
+  box-shadow: var(--shadow);
+  z-index: 200;
+  min-width: 220px;
+  gap: 4px;
+  flex-direction: column;
+}
+#font-dropdown.open { display: flex; }
+.font-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.12s;
+  color: var(--text-dim);
+  border: 1px solid transparent;
+}
+.font-option:hover { background: var(--bg-surface-hover); color: var(--text); }
+.font-option.active { background: var(--accent-glow); color: var(--accent-hover); border-color: var(--accent-glow-strong); font-weight: 600; }
+.font-option-title { font-weight: 600; font-size: 12px; color: var(--text); }
+.font-option-preview { font-size: 10px; color: var(--text-muted); }
+
 /* ─── Sidebar ──────────────────────────────────────────────────────────────── */
 #sidebar {
   background: var(--bg-surface);
@@ -479,7 +614,7 @@ html, body {
   font-size: 11px;
   color: var(--text-muted);
   margin-bottom: 5px;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: var(--font-mono);
   letter-spacing: -0.01em;
 }
 .doc-title {
@@ -570,7 +705,7 @@ html, body {
   top: 10px;
   right: 12px;
   font-size: 10px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   color: var(--text-muted);
   background: var(--bg-surface-2);
   padding: 2px 7px;
@@ -582,10 +717,10 @@ html, body {
 .code-viewer {
   background: var(--bg-surface) !important;
   overflow-x: auto;
-  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.7;
-  padding: 16px 14px;
+  padding: 12px 0;
   margin: 0;
 }
 .code-viewer code {
@@ -593,6 +728,50 @@ html, body {
   padding: 0;
   font-family: inherit;
   font-size: inherit;
+  display: block;
+  min-width: 100%;
+}
+.code-line {
+  display: flex;
+  min-height: 20px;
+  line-height: 20px;
+  padding: 1px 16px 1px 0;
+  transition: background 0.15s ease;
+}
+.code-line:hover {
+  background: var(--bg-surface-hover);
+}
+.code-line.line-highlight-flash {
+  background: var(--accent-glow-strong) !important;
+  box-shadow: inset 3px 0 0 var(--accent-hover);
+  animation: lineFlashFade 2.5s ease-out forwards;
+}
+@keyframes lineFlashFade {
+  0% { background: var(--accent-glow-strong); }
+  60% { background: var(--accent-glow); }
+  100% { background: transparent; }
+}
+.line-num {
+  width: 52px;
+  min-width: 52px;
+  text-align: right;
+  padding-right: 18px;
+  color: var(--text-muted);
+  user-select: none;
+  opacity: 0.55;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+  cursor: default;
+}
+.line-num:hover {
+  opacity: 1;
+  color: var(--accent-hover);
+}
+.line-content {
+  flex: 1;
+  white-space: pre;
+  font-family: var(--font-mono);
 }
 /* Restore hljs colors */
 .code-viewer .hljs { background: none; }
@@ -628,7 +807,41 @@ html, body {
 [data-theme="light"] .code-link.kind-imports { color: #c2410c !important; text-shadow: none; }
 [data-theme="light"] .code-link.kind-extends { color: #7c3aed !important; text-shadow: none; }
 
-/* ─── Annotation glyph inline in code ──────────────────────────────────────── */
+/* ─── Microdoc Annotation Links in Code ────────────────────────────────────── */
+.microdoc-link {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 600;
+  color: #c084fc !important;
+  background: rgba(192, 132, 252, 0.15);
+  border: 1px solid rgba(192, 132, 252, 0.35);
+  border-radius: 4px;
+  padding: 0 6px;
+  font-size: 0.95em;
+  text-shadow: 0 0 8px rgba(192, 132, 252, 0.5);
+  transition: all 0.15s ease;
+  vertical-align: baseline;
+  user-select: none;
+}
+.microdoc-link:hover {
+  background: rgba(192, 132, 252, 0.3);
+  border-color: #c084fc;
+  text-shadow: 0 0 14px rgba(192, 132, 252, 0.9);
+  transform: translateY(-1px);
+}
+.microdoc-link .m-glyph {
+  font-size: 11px;
+  opacity: 0.9;
+}
+[data-theme="light"] .microdoc-link {
+  color: #7c3aed !important;
+  background: rgba(124, 58, 237, 0.1);
+  border-color: rgba(124, 58, 237, 0.3);
+  text-shadow: none;
+}
+
 .annotation-glyph {
   display: inline-block;
   width: 16px;
@@ -652,18 +865,20 @@ html, body {
   transform: scale(1.15);
 }
 
-/* ─── Microdoc Popover ─────────────────────────────────────────────────────── */
+/* ─── Microdoc Popover (Floating card right at cursor) ─────────────────────── */
 #microdoc-popover {
   position: fixed;
   display: none;
   background: var(--bg-surface);
-  border: 1px solid var(--border);
+  border: 1px solid var(--accent);
   border-radius: 10px;
   padding: 14px 16px;
-  box-shadow: var(--shadow), 0 0 0 1px var(--accent-glow-strong);
+  box-shadow: var(--shadow), 0 0 24px var(--accent-glow-strong);
   z-index: 300;
-  max-width: 380px;
-  min-width: 260px;
+  max-width: 480px;
+  min-width: 300px;
+  max-height: 420px;
+  overflow-y: auto;
   pointer-events: none;
 }
 #microdoc-popover .mp-header {
@@ -675,25 +890,50 @@ html, body {
   border-bottom: 1px solid var(--border);
 }
 #microdoc-popover .mp-label {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
-  font-weight: 600;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
   color: var(--accent-hover);
 }
 #microdoc-popover .mp-kind {
   font-size: 10px;
-  color: var(--text-muted);
+  font-weight: 600;
+  color: var(--text-dim);
   background: var(--bg-surface-2);
-  padding: 1px 6px;
+  padding: 2px 7px;
   border-radius: 4px;
   margin-left: auto;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+#microdoc-popover .mp-code-box {
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  margin-bottom: 10px;
+}
+#microdoc-popover .mp-code-box pre {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: 11.5px;
+  max-height: 130px;
+  overflow: auto;
+  background: var(--bg-surface-2);
 }
 #microdoc-popover .mp-body {
-  font-size: 12px;
+  font-size: 12.5px;
   line-height: 1.65;
-  color: var(--text-dim);
-  max-height: 200px;
-  overflow: hidden;
+  color: var(--text);
+}
+#microdoc-popover .mp-footer {
+  margin-top: 10px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  font-size: 10.5px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 /* ─── Microdoc Cards ───────────────────────────────────────────────────────── */
@@ -730,7 +970,7 @@ html, body {
 .microdoc-card-header:hover { background: var(--bg-surface-hover); }
 .mc-glyph { font-size: 13px; }
 .mc-label {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 600;
   color: var(--accent-hover);
@@ -744,10 +984,36 @@ html, body {
   border-radius: 4px;
 }
 .mc-toggle {
-  margin-left: auto;
+  margin-left: 0;
   color: var(--text-muted);
   font-size: 10px;
   transition: transform 0.2s;
+  padding: 2px 4px;
+}
+.mc-jump-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  margin-right: 6px;
+  background: var(--bg-surface);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.mc-jump-btn:hover {
+  background: var(--accent-glow);
+  border-color: var(--accent-hover);
+  color: var(--accent-hover);
+  box-shadow: 0 0 8px var(--accent-glow);
+  transform: translateY(-1px);
 }
 .microdoc-card.expanded .mc-toggle { transform: rotate(90deg); }
 .microdoc-card-body {
@@ -761,13 +1027,13 @@ html, body {
   border: 1px solid var(--border);
   border-radius: 7px;
   overflow-x: auto;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 11.5px;
   line-height: 1.65;
-  padding: 12px;
+  padding: 8px 0;
   margin-bottom: 12px;
 }
-.mc-code code { background: none !important; }
+.mc-code code { background: none !important; display: block; }
 .mc-notes { font-size: 12.5px; }
 
 /* ─── SVG Thread Layer ─────────────────────────────────────────────────────── */
@@ -809,7 +1075,7 @@ html, body {
   max-width: 320px;
 }
 #hover-card .hc-title { font-weight: 700; color: var(--text); margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
-#hover-card .hc-path { font-family: 'JetBrains Mono', monospace; color: var(--text-dim); font-size: 10.5px; }
+#hover-card .hc-path { font-family: var(--font-mono); color: var(--text-dim); font-size: 10.5px; }
 #hover-card .hc-why { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); font-style: italic; color: var(--text-muted); font-size: 11.5px; }
 
 /* ─── Pending Diff Block ───────────────────────────────────────────────────── */
@@ -835,7 +1101,7 @@ html, body {
   padding: 12px;
   font-size: 11.5px;
   overflow-x: auto;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
 }
 .diff-line-add { color: var(--ok); }
 .diff-line-del { color: var(--missing); }
@@ -889,7 +1155,7 @@ html, body {
   border-radius: 8px;
   padding: 14px;
   color: var(--text);
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
   line-height: 1.7;
   outline: none;
@@ -925,7 +1191,7 @@ html, body {
 .markdown-rendered a { color: var(--accent-hover); text-decoration: none; border-bottom: 1px solid var(--accent-glow-strong); transition: border-color 0.15s; }
 .markdown-rendered a:hover { border-color: var(--accent-hover); }
 .markdown-rendered code {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.88em;
   background: var(--bg-surface-2);
   border: 1px solid var(--border);
@@ -1041,6 +1307,57 @@ html, body {
 .switch-btn.active { background: var(--accent); color: #fff; }
 .switch-btn:not(.active):hover { color: var(--text); }
 
+#graph-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  gap: 8px;
+  flex-shrink: 0;
+}
+.dir-toggle-group {
+  display: flex;
+  background: var(--bg-surface-2);
+  border-radius: 6px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  gap: 2px;
+}
+.dir-toggle-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-family: inherit;
+  padding: 2px 7px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.12s;
+  white-space: nowrap;
+}
+.dir-toggle-btn:hover {
+  color: var(--text);
+  background: var(--bg-surface-hover);
+}
+.dir-toggle-btn.active {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.dir-badge {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  background: var(--bg-surface-2);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
 #graph-svg-container {
   flex: 1;
   position: relative;
@@ -1069,7 +1386,7 @@ html, body {
 .conn-item:hover { background: var(--bg-surface-hover); border-color: var(--accent); }
 .conn-item.thread-target { border-color: var(--accent-glow-strong); box-shadow: 0 0 0 1px var(--accent-glow); }
 .conn-item-title { font-weight: 600; font-size: 12.5px; color: var(--text); display: flex; align-items: center; justify-content: space-between; }
-.conn-item-path { font-size: 10.5px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; margin-top: 2px; }
+.conn-item-path { font-size: 10.5px; color: var(--text-muted); font-family: var(--font-mono); margin-top: 2px; }
 .conn-item-meta { font-size: 10.5px; color: var(--text-dim); margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap; }
 
 #graph-footer {
@@ -1154,7 +1471,14 @@ html, body {
     <span class="mp-label" id="mp-label-text"></span>
     <span class="mp-kind" id="mp-kind-text"></span>
   </div>
+  <div class="mp-code-box" id="mp-code-box" style="display:none;">
+    <pre class="mc-code"><code id="mp-code-text"></code></pre>
+  </div>
   <div class="mp-body markdown-rendered" id="mp-body-text"></div>
+  <div class="mp-footer">
+    <span>Click annotation to jump to section</span>
+    <span>↵</span>
+  </div>
 </div>
 
 <!-- Auth Modal -->
@@ -1211,6 +1535,34 @@ html, body {
         <div class="theme-option" data-theme="light" onclick="applyTheme('light')">
           <span class="theme-swatch" style="background:linear-gradient(135deg,#f8fafc,#6366f1)"></span>
           Light Studio
+        </div>
+      </div>
+    </div>
+
+    <div id="font-picker-wrapper">
+      <button class="header-btn" id="font-picker-btn" title="Change typography font palette" onclick="toggleFontPicker()">
+        🔤 <span id="current-font-label">Modern</span>
+      </button>
+      <div id="font-dropdown">
+        <div class="font-option active" data-font="modern" onclick="applyFont('modern')">
+          <div class="font-option-title">⚡ Modern Studio</div>
+          <div class="font-option-preview">Inter + JetBrains Mono</div>
+        </div>
+        <div class="font-option" data-font="apple" onclick="applyFont('apple')">
+          <div class="font-option-title">🍎 Apple Typography</div>
+          <div class="font-option-preview">SF Pro + SF Mono</div>
+        </div>
+        <div class="font-option" data-font="nerd" onclick="applyFont('nerd')">
+          <div class="font-option-title">💻 Nerd Fonts</div>
+          <div class="font-option-preview">JetBrains/Fira NF + Dev Glyphs</div>
+        </div>
+        <div class="font-option" data-font="geist" onclick="applyFont('geist')">
+          <div class="font-option-title">▲ Geist Modern</div>
+          <div class="font-option-preview">Geist Sans + Geist Mono</div>
+        </div>
+        <div class="font-option" data-font="editorial" onclick="applyFont('editorial')">
+          <div class="font-option-title">📖 Editorial Serif</div>
+          <div class="font-option-preview">Newsreader Serif + JetBrains</div>
         </div>
       </div>
     </div>
@@ -1285,6 +1637,15 @@ html, body {
       </div>
     </div>
 
+    <div id="graph-filter-bar">
+      <div class="dir-toggle-group" role="group" aria-label="Link direction">
+        <button class="dir-toggle-btn active" id="btn-dir-all" onclick="setLinkDirection('all')" title="Show all links (incoming & outgoing)">⇄ All</button>
+        <button class="dir-toggle-btn" id="btn-dir-incoming" onclick="setLinkDirection('incoming')" title="Show incoming links (files pointing to current file)">↙ Incoming</button>
+        <button class="dir-toggle-btn" id="btn-dir-outgoing" onclick="setLinkDirection('outgoing')" title="Show outgoing links (files this file points to)">↗ Outgoing</button>
+      </div>
+      <span id="conn-count-badge" class="dir-badge">0 links</span>
+    </div>
+
     <div id="graph-svg-container">
       <svg id="graph-svg"></svg>
     </div>
@@ -1312,6 +1673,7 @@ let authToken = localStorage.getItem('syndocs_auth_token') || null;
 let threadMode = localStorage.getItem('syndocs_thread_mode') || 'hover'; // 'always' | 'hover' | 'off'
 let highlightKeywords = true;
 let currentTheme = localStorage.getItem('syndocs_theme') || 'midnight';
+let linkDirection = localStorage.getItem('syndocs_link_direction') || 'all'; // 'all' | 'incoming' | 'outgoing'
 
 // D3 simulation variables
 let simulation = null;
@@ -1330,6 +1692,8 @@ let currentMicrodocs = {};
 // ─── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
+  initFont();
+  initLinkDirection();
   setupMarkdown();
   renderStats();
   renderSidebar();
@@ -1348,7 +1712,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ─── Theme System ─────────────────────────────────────────────────────────────
+// ─── Theme & Font Systems ────────────────────────────────────────────────────
 
 const THEMES = ['midnight', 'obsidian', 'nord', 'solarized', 'catppuccin', 'light'];
 
@@ -1374,6 +1738,48 @@ function applyTheme(name, silent = false) {
 
 function toggleThemePicker() {
   document.getElementById('theme-dropdown').classList.toggle('open');
+  const fd = document.getElementById('font-dropdown');
+  if (fd) fd.classList.remove('open');
+}
+
+const FONTS = ['modern', 'apple', 'nerd', 'geist', 'editorial'];
+let currentFont = localStorage.getItem('syndocs_font') || 'modern';
+
+function initFont() {
+  applyFont(currentFont, true);
+}
+
+function applyFont(name, silent = false) {
+  if (!FONTS.includes(name)) name = 'modern';
+  currentFont = name;
+  document.documentElement.setAttribute('data-font', name);
+  localStorage.setItem('syndocs_font', name);
+
+  const labels = {
+    modern: 'Modern',
+    apple: 'Apple',
+    nerd: 'Nerd NF',
+    geist: 'Geist',
+    editorial: 'Editorial',
+  };
+  const labelEl = document.getElementById('current-font-label');
+  if (labelEl) labelEl.textContent = labels[name] || name;
+
+  document.querySelectorAll('.font-option').forEach(opt => {
+    opt.classList.toggle('active', opt.dataset.font === name);
+  });
+
+  if (!silent) {
+    const fd = document.getElementById('font-dropdown');
+    if (fd) fd.classList.remove('open');
+  }
+}
+
+function toggleFontPicker() {
+  const fd = document.getElementById('font-dropdown');
+  if (fd) fd.classList.toggle('open');
+  const td = document.getElementById('theme-dropdown');
+  if (td) td.classList.remove('open');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1655,6 +2061,24 @@ function renderDocContent(doc, id) {
   stopThreadLoop();
   allThreadSpans = [];
 
+  // Populate microdocs for this source file FIRST so buildHighlightedCodeHtml has full registry
+  const microEntries = [];
+  for (const [dId, dEntry] of Object.entries(DATA.docs)) {
+    if (dEntry.type === 'microdoc' && dEntry.sourceFile === (doc.sourceFile || id)) {
+      const label = dId.includes('#') ? dId.split('#').slice(1).join('#') : dId;
+      microEntries.push({ id: dId, label, entry: dEntry });
+      currentMicrodocs[label] = {
+        notes: dEntry.notes,
+        codeCopy: dEntry.codeCopy,
+        codeLanguage: dEntry.codeLanguage || doc.codeLanguage || 'ts',
+        elementKind: dEntry.elementKind || '',
+        elementName: dEntry.elementName || label,
+        scopeStartLine: dEntry.scopeStartLine,
+        scopeEndLine: dEntry.scopeEndLine,
+      };
+    }
+  }
+
   // ── 1. Code Block ──────────────────────────────────────────────────────────
   if (doc.codeCopy) {
     const codeHeader = document.createElement('div');
@@ -1679,7 +2103,7 @@ function renderDocContent(doc, id) {
     pre.className = 'code-viewer';
     const codeEl = document.createElement('code');
 
-    // Build highlighted code with overlaid thread links
+    // Build highlighted code with overlaid thread links AND highlighted microdoc annotations
     codeEl.innerHTML = buildHighlightedCodeHtml(doc.codeCopy, doc.tokens || [], doc.codeLanguage || 'ts', currentMicrodocs);
     pre.appendChild(codeEl);
     viewerBox.appendChild(pre);
@@ -1692,7 +2116,7 @@ function renderDocContent(doc, id) {
     });
 
     attachTokenListeners(codeEl, id);
-    attachGlyphListeners(codeEl);
+    attachMicrodocListeners(codeEl);
   }
 
   // ── 2. Pending Diff ────────────────────────────────────────────────────────
@@ -1700,94 +2124,21 @@ function renderDocContent(doc, id) {
   if (diffMatch) {
     const diffBox = document.createElement('div');
     diffBox.className = 'diff-alert-box';
-    diffBox.innerHTML = \`
-      <div class="diff-alert-title">⚠ Code drift detected (pending update)</div>
-      <pre class="diff-pre">\${formatDiffLines(diffMatch[1])}</pre>
-    \`;
+    diffBox.innerHTML =
+      '<div class="diff-alert-title">⚠ Code drift detected (pending update)</div>' +
+      '<pre class="diff-pre">' + formatDiffLines(diffMatch[1]) + '</pre>';
     container.appendChild(diffBox);
   }
 
-  // ── 3. Microdoc Cards ──────────────────────────────────────────────────────
-  // Find microdocs for this source file from DATA.docs
-  const microEntries = [];
-  for (const [dId, dEntry] of Object.entries(DATA.docs)) {
-    if (dEntry.type === 'microdoc' && dEntry.sourceFile === (doc.sourceFile || id)) {
-      const label = dId.includes('#') ? dId.split('#').slice(1).join('#') : dId;
-      microEntries.push({ id: dId, label, entry: dEntry });
-      currentMicrodocs[label] = { notes: dEntry.notes, elementKind: '', elementName: label };
-    }
-  }
-
-  if (microEntries.length > 0) {
-    const microSection = document.createElement('div');
-    microSection.className = 'microdocs-section';
-    microSection.innerHTML = '<div class="microdocs-section-title">🏷️ Annotations (' + microEntries.length + ')</div>';
-
-    for (const { id: mId, label, entry } of microEntries) {
-      const card = document.createElement('div');
-      card.className = 'microdoc-card';
-      card.dataset.label = label;
-
-      const header = document.createElement('div');
-      header.className = 'microdoc-card-header';
-      const kindSpan = entry.codeLanguage ? '<span class="mc-element-kind">' + escapeHtml(entry.codeLanguage) + '</span>' : '';
-      header.innerHTML =
-        '<span class="mc-glyph">🏷️</span>' +
-        '<span class="mc-label">#' + escapeHtml(label) + '</span>' +
-        kindSpan +
-        '<span class="mc-toggle">▶</span>';
-      header.addEventListener('click', () => card.classList.toggle('expanded'));
-
-      const body = document.createElement('div');
-      body.className = 'microdoc-card-body';
-
-      if (entry.codeCopy) {
-        const mcPre = document.createElement('pre');
-        mcPre.className = 'mc-code';
-        const mcCode = document.createElement('code');
-        const validLang = entry.codeLanguage && hljs.getLanguage(entry.codeLanguage) ? entry.codeLanguage : 'plaintext';
-        try {
-          mcCode.innerHTML = hljs.highlight(entry.codeCopy, { language: validLang }).value;
-        } catch {
-          mcCode.textContent = entry.codeCopy;
-        }
-        mcPre.appendChild(mcCode);
-        body.appendChild(mcPre);
-      }
-
-      const notesDiv = document.createElement('div');
-      notesDiv.className = 'mc-notes markdown-rendered';
-      const rawNotes = entry.notes && entry.notes.trim() ? entry.notes : '_No notes yet._';
-      notesDiv.innerHTML = marked.parse(rawNotes);
-      body.appendChild(notesDiv);
-
-      card.appendChild(header);
-      card.appendChild(body);
-      microSection.appendChild(card);
-    }
-
-    container.appendChild(microSection);
-  }
-
-  // ── 4. Connections Table ───────────────────────────────────────────────────
-  const connections = extractConnections(doc.content || '');
-  if (connections.length > 0) {
-    const connSection = document.createElement('div');
-    connSection.className = 'connections-section';
-    connSection.innerHTML = renderConnectionTable(connections);
-    container.appendChild(connSection);
-  }
-
-  // ── 5. Notes & Editor ─────────────────────────────────────────────────────
+  // ── 3. Notes & Editor (Full File Documentation Notes — placed right after code) ──
   const notesContainer = document.createElement('div');
   notesContainer.className = 'notes-container';
 
   const notesHeader = document.createElement('div');
   notesHeader.className = 'notes-header';
-  notesHeader.innerHTML = \`
-    <div class="notes-title">📝 Documentation Notes</div>
-    <button class="action-btn" id="edit-notes-toggle-btn" onclick="toggleEditNotes()">✏️ Edit</button>
-  \`;
+  notesHeader.innerHTML =
+    '<div class="notes-title">📝 Documentation Notes</div>' +
+    '<button class="action-btn" id="edit-notes-toggle-btn" onclick="toggleEditNotes()">✏️ Edit Notes</button>';
   notesContainer.appendChild(notesHeader);
 
   const notesView = document.createElement('div');
@@ -1800,16 +2151,102 @@ function renderDocContent(doc, id) {
   const editorBox = document.createElement('div');
   editorBox.id = 'notes-editor-box';
   editorBox.className = 'editor-box';
-  editorBox.innerHTML = \`
-    <textarea id="notes-textarea" class="editor-textarea" placeholder="Write documentation notes in Markdown...">\${escapeHtml(doc.notes || '')}</textarea>
-    <div class="editor-buttons">
-      <button class="action-btn primary" onclick="saveNotes()">💾 Save Notes</button>
-      <button class="action-btn" onclick="toggleEditNotes()">Cancel</button>
-      <span id="save-indicator" style="font-size:12px; color:var(--text-muted); margin-left:8px;"></span>
-    </div>
-  \`;
+  editorBox.innerHTML =
+    '<textarea id="notes-textarea" class="editor-textarea" placeholder="Write documentation notes in Markdown...">' + escapeHtml(doc.notes || '') + '</textarea>' +
+    '<div class="editor-buttons">' +
+      '<button class="action-btn primary" onclick="saveNotes()">💾 Save Notes</button>' +
+      '<button class="action-btn" onclick="toggleEditNotes()">Cancel</button>' +
+      '<span id="save-indicator" style="font-size:12px; color:var(--text-muted); margin-left:8px;"></span>' +
+    '</div>';
   notesContainer.appendChild(editorBox);
   container.appendChild(notesContainer);
+
+  // ── 4. Connections Table ───────────────────────────────────────────────────
+  const connections = extractConnections(doc.content || '');
+  if (connections.length > 0) {
+    const connSection = document.createElement('div');
+    connSection.className = 'connections-section';
+    connSection.innerHTML = renderConnectionTable(connections);
+    container.appendChild(connSection);
+  }
+
+  // ── 5. Microdoc Cards (Annotations) ────────────────────────────────────────
+  if (microEntries.length > 0) {
+    const microSection = document.createElement('div');
+    microSection.className = 'microdocs-section';
+    microSection.innerHTML = '<div class="microdocs-section-title">🏷️ Annotations (' + microEntries.length + ')</div>';
+
+    for (const { id: mId, label, entry } of microEntries) {
+      const card = document.createElement('div');
+      card.className = 'microdoc-card expanded';
+      card.dataset.label = label;
+
+      const header = document.createElement('div');
+      header.className = 'microdoc-card-header';
+      const kindBadge = entry.elementKind ? '<span class="mc-element-kind">' + escapeHtml(entry.elementKind) + '</span>' : '';
+      let targetLine = entry.scopeStartLine;
+      if (!targetLine && doc.codeCopy) {
+        const cLines = doc.codeCopy.split('\\n');
+        for (let li = 0; li < cLines.length; li++) {
+          if (cLines[li].includes('@synd') && cLines[li].includes(label)) {
+            targetLine = li + 1;
+            break;
+          }
+        }
+      }
+
+      const jumpBtn = targetLine ?
+        '<button class="mc-jump-btn" title="Jump to line in source code" onclick="event.stopPropagation(); jumpToCodeLine(' + targetLine + ')">↑ Line ' + targetLine + '</button>' : '';
+
+      header.innerHTML =
+        '<span class="mc-glyph">🏷️</span>' +
+        '<span class="mc-label">#' + escapeHtml(label) + '</span>' +
+        kindBadge +
+        jumpBtn +
+        '<span class="mc-toggle">▼</span>';
+      header.addEventListener('click', () => {
+        card.classList.toggle('expanded');
+        const toggle = header.querySelector('.mc-toggle');
+        if (toggle) toggle.textContent = card.classList.contains('expanded') ? '▼' : '▶';
+      });
+
+      const body = document.createElement('div');
+      body.className = 'microdoc-card-body';
+
+      if (entry.codeCopy) {
+        const mcPre = document.createElement('pre');
+        mcPre.className = 'mc-code';
+        const mcCode = document.createElement('code');
+        const validLang = entry.codeLanguage && hljs.getLanguage(entry.codeLanguage) ? entry.codeLanguage : 'plaintext';
+        let hl;
+        try {
+          hl = hljs.highlight(entry.codeCopy, { language: validLang }).value;
+        } catch {
+          hl = escapeHtml(entry.codeCopy);
+        }
+        const startLine = entry.scopeStartLine || 1;
+        const mcLines = hl.split('\\n').map((l, i) => {
+          const lNum = startLine + i;
+          return '<div class="code-line"><span class="line-num">' + lNum + '</span><span class="line-content">' + (l || ' ') + '</span></div>';
+        }).join('');
+        mcCode.innerHTML = mcLines;
+        mcPre.appendChild(mcCode);
+        body.appendChild(mcPre);
+      }
+
+      const notesDiv = document.createElement('div');
+      notesDiv.className = 'mc-notes markdown-rendered';
+      const rawNotes = entry.notes && entry.notes.trim() ? entry.notes : '_No notes added yet._';
+      notesDiv.innerHTML = marked.parse(rawNotes);
+      body.appendChild(notesDiv);
+
+      card.appendChild(header);
+      card.appendChild(body);
+      microSection.appendChild(card);
+    }
+
+    container.appendChild(microSection);
+  }
 
   // Start thread loop if needed
   setTimeout(() => {
@@ -1830,45 +2267,49 @@ function buildHighlightedCodeHtml(code, tokens, language, microdocRegistry) {
     highlighted = escapeHtml(code);
   }
 
-  if (!highlightKeywords || tokens.length === 0) {
-    return addAnnotationGlyphs(highlighted, code, microdocRegistry);
-  }
-
-  // Step 2: build per-line token map
-  const lines = code.split('\\n');
-  const tokenMap = new Map();
-  for (const t of tokens) {
-    if (!tokenMap.has(t.line)) tokenMap.set(t.line, []);
-    tokenMap.get(t.line).push(t);
-  }
-
-  // Step 3: overlay code-link spans on highlighted lines
-  const hlLines = highlighted.split('\\n');
-  const resultLines = hlLines.map((hlLine, idx) => {
-    const lineNum = idx + 1;
-    const lineTokens = tokenMap.get(lineNum) || [];
-    if (lineTokens.length === 0) return hlLine;
-
-    let result = hlLine;
-    for (const tok of lineTokens) {
-      // Only match the token name when it appears as a text node (outside <...>)
-      result = overlayCodeLink(result, tok);
+  // Step 2: Overlay token links if tokens present and highlightKeywords enabled
+  let overlaid = highlighted;
+  if (highlightKeywords && tokens.length > 0) {
+    const tokenMap = new Map();
+    for (const t of tokens) {
+      if (!tokenMap.has(t.line)) tokenMap.set(t.line, []);
+      tokenMap.get(t.line).push(t);
     }
-    return result;
-  });
 
-  const overlaid = resultLines.join('\\n');
-  return addAnnotationGlyphs(overlaid, code, microdocRegistry);
+    const hlLines = highlighted.split('\\n');
+    const resultLines = hlLines.map((hlLine, idx) => {
+      const lineNum = idx + 1;
+      const lineTokens = tokenMap.get(lineNum) || [];
+      if (lineTokens.length === 0) return hlLine;
+
+      let result = hlLine;
+      for (const tok of lineTokens) {
+        result = overlayCodeLink(result, tok);
+      }
+      return result;
+    });
+
+    overlaid = resultLines.join('\\n');
+  }
+
+  // Step 3: Highlight microdoc annotations inside comments
+  const annotated = addMicrodocHighlights(overlaid, code, microdocRegistry);
+
+  // Step 4: Line numbers for code viewer
+  const lines = annotated.split('\\n');
+  return lines.map((lHtml, idx) => {
+    const lNum = idx + 1;
+    return '<div class="code-line" id="code-line-' + lNum + '"><span class="line-num">' + lNum + '</span><span class="line-content">' + (lHtml || ' ') + '</span></div>';
+  }).join('');
 }
 
 function overlayCodeLink(hlLine, tok) {
   const escapedName = escapeHtml(tok.name);
-  const kindClass = \`kind-\${tok.kind || 'calls'}\`;
-  const dataAttrs = \`data-target="\${escapeHtml(tok.targetFile)}" data-name="\${escapedName}" data-kind="\${escapeHtml(tok.kind)}" data-line="\${tok.line}"\`;
-  const replacement = \`<span class="code-link \${kindClass}" \${dataAttrs}>\${escapedName}</span>\`;
+  const kindClass = 'kind-' + (tok.kind || 'calls');
+  const dataAttrs = 'data-target="' + escapeHtml(tok.targetFile) + '" data-name="' + escapedName + '" data-kind="' + escapeHtml(tok.kind) + '" data-line="' + tok.line + '"';
+  const replacement = '<span class="code-link ' + kindClass + '" ' + dataAttrs + '>' + escapedName + '</span>';
 
   // Replace only text content occurrences — skip those inside <tag ...> attributes
-  // We walk through the string splitting on < > boundaries
   let result = '';
   let pos = 0;
   const str = hlLine;
@@ -1876,19 +2317,15 @@ function overlayCodeLink(hlLine, tok) {
 
   while (pos < str.length) {
     if (str[pos] === '<') {
-      // find end of tag
       const end = str.indexOf('>', pos);
       if (end === -1) { result += str.slice(pos); break; }
       result += str.slice(pos, end + 1);
       pos = end + 1;
     } else {
-      // text node — find next '<'
       const nextTag = str.indexOf('<', pos);
       const segment = nextTag === -1 ? str.slice(pos) : str.slice(pos, nextTag);
-      // replace first occurrence of token name in this text segment
       const idx = segment.indexOf(escapedName);
       if (idx !== -1) {
-        // check word boundary (simple: char before/after must not be alphanum)
         const before = idx > 0 ? segment[idx - 1] : ' ';
         const after = idx + nameLen < segment.length ? segment[idx + nameLen] : ' ';
         const isWordBound = !/[a-zA-Z0-9_$]/.test(before) && !/[a-zA-Z0-9_$]/.test(after);
@@ -1905,7 +2342,7 @@ function overlayCodeLink(hlLine, tok) {
   return result;
 }
 
-function addAnnotationGlyphs(highlightedHtml, rawCode, microdocRegistry) {
+function addMicrodocHighlights(highlightedHtml, rawCode, microdocRegistry) {
   if (!microdocRegistry || Object.keys(microdocRegistry).length === 0) return highlightedHtml;
 
   const lines = highlightedHtml.split('\\n');
@@ -1913,17 +2350,55 @@ function addAnnotationGlyphs(highlightedHtml, rawCode, microdocRegistry) {
 
   return lines.map((line, idx) => {
     const rawLine = rawLines[idx] || '';
-    // Check if this raw line has a @syndocs: label annotation
-    const m = rawLine.match(/@synd(?:ocs)?:\\s*([\\w-]+)/);
+    const m = rawLine.match(/@(?:syndocs|synd)(?:\\s*:\\s*([a-zA-Z0-9_-]+))?/);
     if (!m) return line;
-    const label = m[1];
-    if (!microdocRegistry[label]) return line;
-    return line + \`<span class="annotation-glyph" data-microdoc="\${escapeHtml(label)}" title="Microdoc: #\${escapeHtml(label)}">◈</span>\`;
+
+    let label = m[1];
+    if (!label) {
+      const lineNum = idx + 1;
+      for (const [l, entry] of Object.entries(microdocRegistry)) {
+        if (entry.scopeStartLine !== undefined && entry.scopeStartLine <= lineNum && lineNum <= (entry.scopeEndLine || lineNum)) {
+          label = l;
+          break;
+        }
+      }
+      if (!label && Object.keys(microdocRegistry).length === 1) {
+        label = Object.keys(microdocRegistry)[0];
+      }
+    }
+
+    if (!label || !microdocRegistry[label]) return line;
+
+    const escapedLabel = escapeHtml(label);
+    const annotText = m[0];
+    const escapedText = escapeHtml(annotText);
+
+    const badgeHtml =
+      '<span class="microdoc-link" data-microdoc="' + escapedLabel + '" title="Microdoc: #' + escapedLabel + '">' +
+        '<span class="m-glyph">🏷️</span>' + escapedText +
+      '</span>';
+
+    if (line.includes(escapedText)) {
+      return line.replace(escapedText, badgeHtml);
+    } else if (line.includes(annotText)) {
+      return line.replace(annotText, badgeHtml);
+    }
+    return line + ' <span class="microdoc-link" data-microdoc="' + escapedLabel + '"><span class="m-glyph">🏷️</span>#' + escapedLabel + '</span>';
   }).join('\\n');
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// ─── Thread Link Listeners ────────────────────────────────────────────────────
+function jumpToCodeLine(lineNum) {
+  const lineEl = document.getElementById('code-line-' + lineNum);
+  if (lineEl) {
+    lineEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    lineEl.classList.remove('line-highlight-flash');
+    void lineEl.offsetWidth;
+    lineEl.classList.add('line-highlight-flash');
+  } else {
+    const viewer = document.querySelector('.code-viewer-container');
+    if (viewer) viewer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
 
 function attachTokenListeners(codeEl, currentId) {
   const hoverCard = document.getElementById('hover-card');
@@ -1937,14 +2412,13 @@ function attachTokenListeners(codeEl, currentId) {
     span.addEventListener('mouseenter', e => {
       hoverCard.style.display = 'block';
       positionHoverCard(e.clientX, e.clientY);
-      hoverCard.innerHTML = \`
-        <div class="hc-title">
-          <span style="color:var(--\${kind || 'calls'})">\${escapeHtml((kind || 'calls').toUpperCase())}</span>
-          \${escapeHtml(symbolName)}
-        </div>
-        <div class="hc-path">\${escapeHtml(targetFile)} · line \${escapeHtml(String(line))}</div>
-        <div class="hc-why">Click to navigate to this file's documentation</div>
-      \`;
+      hoverCard.innerHTML =
+        '<div class="hc-title">' +
+          '<span style="color:var(--' + escapeHtml(kind || 'calls') + ')">' + escapeHtml((kind || 'calls').toUpperCase()) + '</span> ' +
+          escapeHtml(symbolName) +
+        '</div>' +
+        '<div class="hc-path">' + escapeHtml(targetFile) + ' · line ' + escapeHtml(String(line)) + '</div>' +
+        '<div class="hc-why">Click to navigate to file documentation</div>';
       highlightGraphNode(targetFile);
       if (threadMode !== 'off') {
         activeThreadSpan = span;
@@ -1964,32 +2438,61 @@ function attachTokenListeners(codeEl, currentId) {
   });
 }
 
-function attachGlyphListeners(codeEl) {
+function attachMicrodocListeners(codeEl) {
   const popover = document.getElementById('microdoc-popover');
   const labelEl = document.getElementById('mp-label-text');
   const kindEl = document.getElementById('mp-kind-text');
   const bodyEl = document.getElementById('mp-body-text');
+  const codeBox = document.getElementById('mp-code-box');
+  const codeText = document.getElementById('mp-code-text');
 
-  codeEl.querySelectorAll('.annotation-glyph').forEach(glyph => {
-    const label = glyph.dataset.microdoc;
-    glyph.addEventListener('mouseenter', e => {
+  codeEl.querySelectorAll('.microdoc-link, .annotation-glyph').forEach(el => {
+    const label = el.dataset.microdoc;
+    el.addEventListener('mouseenter', e => {
       const micro = currentMicrodocs[label];
       if (!micro) return;
+
       labelEl.textContent = '#' + label;
-      kindEl.textContent = micro.elementKind || 'annotation';
-      bodyEl.innerHTML = marked.parse(micro.notes && micro.notes.trim() ? micro.notes : '_No notes yet._');
+      if (micro.elementKind) {
+        kindEl.textContent = micro.elementKind;
+        kindEl.style.display = 'inline-block';
+      } else {
+        kindEl.style.display = 'none';
+      }
+
+      if (micro.codeCopy && micro.codeCopy.trim()) {
+        codeBox.style.display = 'block';
+        const validLang = micro.codeLanguage && hljs.getLanguage(micro.codeLanguage) ? micro.codeLanguage : 'plaintext';
+        try {
+          codeText.innerHTML = hljs.highlight(micro.codeCopy, { language: validLang }).value;
+        } catch {
+          codeText.textContent = micro.codeCopy;
+        }
+      } else {
+        codeBox.style.display = 'none';
+      }
+
+      const rawNotes = micro.notes && micro.notes.trim() ? micro.notes : '_No documentation notes added yet._';
+      bodyEl.innerHTML = marked.parse(rawNotes);
+
       popover.style.display = 'block';
       positionPopover(e.clientX, e.clientY);
     });
-    glyph.addEventListener('mousemove', e => positionPopover(e.clientX, e.clientY));
-    glyph.addEventListener('mouseleave', () => { popover.style.display = 'none'; });
-    glyph.addEventListener('click', e => {
+
+    el.addEventListener('mousemove', e => positionPopover(e.clientX, e.clientY));
+    el.addEventListener('mouseleave', () => { popover.style.display = 'none'; });
+
+    el.addEventListener('click', e => {
       e.stopPropagation();
-      // Scroll to and expand the matching microdoc card
-      const card = document.querySelector(\`.microdoc-card[data-label="\${CSS.escape(label)}"]\`);
+      const card = document.querySelector('.microdoc-card[data-label="' + CSS.escape(label) + '"]');
       if (card) {
         card.classList.add('expanded');
+        const toggle = card.querySelector('.mc-toggle');
+        if (toggle) toggle.textContent = '▼';
         card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        card.style.transition = 'box-shadow 0.25s';
+        card.style.boxShadow = '0 0 0 2px var(--accent), 0 0 16px var(--accent-glow-strong)';
+        setTimeout(() => { card.style.boxShadow = ''; }, 1600);
       }
     });
   });
@@ -2008,9 +2511,13 @@ function positionHoverCard(cx, cy) {
 function positionPopover(cx, cy) {
   const pop = document.getElementById('microdoc-popover');
   const vw = window.innerWidth, vh = window.innerHeight;
-  let x = cx + 16, y = cy + 14;
-  if (x + 400 > vw) x = cx - 400 - 8;
-  if (y + 250 > vh) y = cy - 250 - 8;
+  const pw = pop.offsetWidth || 400;
+  const ph = pop.offsetHeight || 260;
+  let x = cx + 18, y = cy + 14;
+  if (x + pw > vw - 14) x = cx - pw - 14;
+  if (y + ph > vh - 14) y = cy - ph - 14;
+  if (x < 14) x = 14;
+  if (y < 14) y = 14;
   pop.style.left = x + 'px';
   pop.style.top = y + 'px';
 }
@@ -2214,6 +2721,29 @@ function saveNotes() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ─── Graph Panel ──────────────────────────────────────────────────────────────
 
+function initLinkDirection() {
+  setLinkDirection(linkDirection, true);
+}
+
+function setLinkDirection(dir, silent = false) {
+  if (!['all', 'incoming', 'outgoing'].includes(dir)) dir = 'all';
+  linkDirection = dir;
+  localStorage.setItem('syndocs_link_direction', dir);
+
+  ['all', 'incoming', 'outgoing'].forEach(d => {
+    const btn = document.getElementById('btn-dir-' + d);
+    if (btn) btn.classList.toggle('active', d === dir);
+  });
+
+  if (currentDocId) {
+    updateConnectedList(currentDocId);
+  } else {
+    updateConnectedList('');
+  }
+
+  applyGraphDirectionFilter();
+}
+
 function setGraphView(view) {
   currentGraphView = view;
   document.getElementById('btn-view-canvas').classList.toggle('active', view === 'canvas');
@@ -2225,36 +2755,96 @@ function setGraphView(view) {
 
 function updateConnectedList(docId) {
   const container = document.getElementById('connected-list-container');
+  const countBadge = document.getElementById('conn-count-badge');
   container.innerHTML = '';
-  const connectedEdges = DATA.edges.filter(e => e.source === docId || e.target === docId);
 
-  if (connectedEdges.length === 0) {
-    container.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding:28px; font-size:12.5px;">No connected files.</div>';
+  if (!docId) {
+    container.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding:28px; font-size:12px;">Select a document to inspect connected files.</div>';
+    if (countBadge) countBadge.textContent = '0 links';
+    return;
+  }
+
+  const baseId = docId.includes('#') ? docId.split('#')[0] : docId;
+
+  const isTargetEdge = e => {
+    return (e.target === docId || e.target === baseId || e.target.startsWith(baseId + '#')) &&
+           e.source !== docId && e.source !== baseId && !e.source.startsWith(baseId + '#');
+  };
+
+  const isSourceEdge = e => {
+    return (e.source === docId || e.source === baseId || e.source.startsWith(baseId + '#')) &&
+           e.target !== docId && e.target !== baseId && !e.target.startsWith(baseId + '#');
+  };
+
+  let relevantEdges = [];
+  if (linkDirection === 'incoming') {
+    relevantEdges = DATA.edges.filter(e => isTargetEdge(e) && e.kind !== 'contains');
+  } else if (linkDirection === 'outgoing') {
+    relevantEdges = DATA.edges.filter(e => isSourceEdge(e) && e.kind !== 'contains');
+  } else {
+    relevantEdges = DATA.edges.filter(e => (isTargetEdge(e) || isSourceEdge(e)) && e.kind !== 'contains');
+  }
+
+  if (countBadge) {
+    const dirText = linkDirection === 'incoming' ? 'incoming' : linkDirection === 'outgoing' ? 'outgoing' : 'links';
+    countBadge.textContent = relevantEdges.length + ' ' + dirText;
+  }
+
+  if (relevantEdges.length === 0) {
+    const msg = linkDirection === 'incoming'
+      ? 'No incoming links found.<br><span style="font-size:11px; color:var(--text-muted);">No other files currently call or reference this file.</span>'
+      : linkDirection === 'outgoing'
+      ? 'No outgoing links found.<br><span style="font-size:11px; color:var(--text-muted);">This file does not call or import any tracked files.</span>'
+      : 'No connected files.';
+    container.innerHTML = '<div style="color:var(--text-muted); text-align:center; padding:28px; font-size:12px; line-height:1.6;">' + msg + '</div>';
     return;
   }
 
   const map = new Map();
-  for (const e of connectedEdges) {
-    const otherId = e.source === docId ? e.target : e.source;
-    if (!map.has(otherId)) map.set(otherId, []);
-    map.get(otherId).push(e);
+  for (const e of relevantEdges) {
+    const isInc = isTargetEdge(e);
+    const otherId = isInc ? e.source : e.target;
+    const otherBase = otherId.includes('#') ? otherId.split('#')[0] : otherId;
+    if (!map.has(otherBase)) map.set(otherBase, { edges: [], incomingCount: 0, outgoingCount: 0 });
+    const entry = map.get(otherBase);
+    entry.edges.push(e);
+    if (isInc) entry.incomingCount++;
+    else entry.outgoingCount++;
   }
 
-  for (const [otherId, edges] of map.entries()) {
+  for (const [otherId, info] of map.entries()) {
     const item = document.createElement('div');
     item.className = 'conn-item';
     item.dataset.targetId = otherId;
     const label = otherId.split('/').pop();
-    item.innerHTML = \`
-      <div class="conn-item-title">
-        \${escapeHtml(label)}
-        <span class="tree-badge dim">\${edges.length} link\${edges.length > 1 ? 's' : ''}</span>
-      </div>
-      <div class="conn-item-path">\${escapeHtml(otherId)}</div>
-      <div class="conn-item-meta">
-        \${edges.slice(0, 4).map(e => \`<span style="color:var(--\${e.kind || 'calls'})">• \${escapeHtml(e.kind || 'ref')}: \${escapeHtml(e.symbol || '')}</span>\`).join(' ')}
-      </div>
-    \`;
+
+    let dirBadge = '';
+    if (info.incomingCount > 0 && info.outgoingCount > 0) {
+      dirBadge = '<span class="tree-badge dim" style="color:var(--accent-hover); border-color:var(--accent-glow);">⇄ Two-way</span>';
+    } else if (info.incomingCount > 0) {
+      dirBadge = '<span class="tree-badge dim" style="color:var(--calls); border-color:rgba(56,189,248,0.3);">↙ Incoming</span>';
+    } else {
+      dirBadge = '<span class="tree-badge dim" style="color:var(--imports); border-color:rgba(251,146,60,0.3);">↗ Outgoing</span>';
+    }
+
+    const edgePills = info.edges.slice(0, 4).map(e => {
+      const eIsInc = isTargetEdge(e);
+      const symbolText = e.symbol ? ': ' + escapeHtml(e.symbol) : '';
+      const prefix = eIsInc ? 'called by' : 'calls';
+      return '<span style="color:var(--' + (e.kind || 'calls') + ')">• ' + prefix + ' (' + escapeHtml(e.kind || 'ref') + ')' + symbolText + '</span>';
+    }).join(' ');
+
+    item.innerHTML =
+      '<div class="conn-item-title">' +
+        '<span>' + escapeHtml(label) + '</span>' +
+        '<div style="display:flex; gap:5px; align-items:center;">' +
+          dirBadge +
+          '<span class="tree-badge dim">' + info.edges.length + ' link' + (info.edges.length > 1 ? 's' : '') + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="conn-item-path">' + escapeHtml(otherId) + '</div>' +
+      '<div class="conn-item-meta">' + edgePills + '</div>';
+
     item.addEventListener('click', () => openDoc(otherId));
     container.appendChild(item);
   }
@@ -2335,16 +2925,16 @@ function buildGraph() {
     .force('collision', d3.forceCollide().radius(d => nodeRadius(d) + 10).strength(0.85))
     .force('radial', d3.forceRadial(Math.min(W, H) * 0.3, W / 2, H / 2).strength(0.04));
 
-  // Links as curved paths
-  const linkPaths = svgG.append('g')
-    .selectAll('path')
+  // Obsidian-style straight graph lines
+  const linkLines = svgG.append('g')
+    .attr('class', 'graph-links')
+    .selectAll('line')
     .data(links)
-    .join('path')
-    .attr('fill', 'none')
+    .join('line')
     .attr('stroke', d => edgeColor(d))
-    .attr('stroke-width', 1.1)
-    .attr('stroke-opacity', 0.4)
-    .attr('marker-end', 'url(#arrow)');
+    .attr('stroke-width', 1.2)
+    .attr('stroke-opacity', 0.35)
+    .attr('stroke-linecap', 'round');
 
   // Node groups
   const nodeGroup = svgG.append('g')
@@ -2358,13 +2948,29 @@ function buildGraph() {
       document.getElementById('graph-info').textContent = d.id + ' (' + d.status + ')';
       d3.select(e.currentTarget).select('circle.node-core')
         .transition().duration(150)
-        .attr('r', nodeRadius(d) * 1.4);
+        .attr('r', nodeRadius(d) * 1.35);
+
+      // Obsidian-style focus: brighten connected edges and connected neighbor nodes
+      linkLines
+        .transition().duration(120)
+        .attr('stroke-opacity', l => (l.source.id === d.id || l.target.id === d.id ? 0.9 : 0.08))
+        .attr('stroke-width', l => (l.source.id === d.id || l.target.id === d.id ? 2.0 : 0.8));
+
+      nodeGroup
+        .transition().duration(120)
+        .attr('opacity', n => {
+          if (n.id === d.id) return 1;
+          const isConnected = links.some(l => (l.source.id === d.id && l.target.id === n.id) || (l.target.id === d.id && l.source.id === n.id));
+          return isConnected ? 1 : 0.25;
+        });
     })
     .on('mouseout', (e, d) => {
       document.getElementById('graph-info').textContent = 'Hover node to inspect · drag to rearrange';
       d3.select(e.currentTarget).select('circle.node-core')
         .transition().duration(150)
         .attr('r', nodeRadius(d));
+
+      applyGraphDirectionFilter();
     })
     .call(d3.drag()
       .on('start', (e, d) => { if (!e.active) simulation.alphaTarget(0.15).restart(); d.fx = d.x; d.fy = d.y; })
@@ -2400,18 +3006,13 @@ function buildGraph() {
     .attr('opacity', d => edgeCount.get(d.id) > 1 ? 1 : 0.6)
     .text(d => d.label.length > 14 ? d.label.slice(0, 13) + '…' : d.label);
 
-  // Curved link path update
-  function curvePath(d) {
-    const sx = d.source.x, sy = d.source.y;
-    const tx = d.target.x, ty = d.target.y;
-    const dx = tx - sx, dy = ty - sy;
-    const dr = Math.sqrt(dx * dx + dy * dy) * 0.75;
-    return \`M\${sx},\${sy}A\${dr},\${dr} 0 0,1 \${tx},\${ty}\`;
-  }
-
   simulation.on('tick', () => {
-    linkPaths.attr('d', curvePath);
-    nodeGroup.attr('transform', d => \`translate(\${d.x},\${d.y})\`);
+    linkLines
+      .attr('x1', d => d.source.x)
+      .attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x)
+      .attr('y2', d => d.target.y);
+    nodeGroup.attr('transform', d => 'translate(' + d.x + ',' + d.y + ')');
   });
 }
 
@@ -2423,6 +3024,77 @@ function highlightGraphNode(id) {
       .transition().duration(180)
       .attr('stroke-opacity', isSelected ? 1 : 0);
   });
+  applyGraphDirectionFilter();
+}
+
+function applyGraphDirectionFilter() {
+  if (!svgG) return;
+  const id = currentDocId;
+  const linesSel = svgG.selectAll('line');
+  const nodesSel = svgG.selectAll('g[data-id]');
+
+  if (!id) {
+    linesSel.transition().duration(200).attr('stroke-opacity', 0.35).attr('stroke-width', 1.2);
+    nodesSel.transition().duration(200).attr('opacity', 1);
+    return;
+  }
+
+  const baseId = id.includes('#') ? id.split('#')[0] : id;
+
+  const isIncomingEdge = l => {
+    const t = l.target.id || l.target;
+    return (t === id || t === baseId || t.startsWith(baseId + '#')) && l.source.id !== id && l.source.id !== baseId && !l.source.id.startsWith(baseId + '#');
+  };
+
+  const isOutgoingEdge = l => {
+    const s = l.source.id || l.source;
+    return (s === id || s === baseId || s.startsWith(baseId + '#')) && l.target.id !== id && l.target.id !== baseId && !l.target.id.startsWith(baseId + '#');
+  };
+
+  if (linkDirection === 'incoming') {
+    linesSel.transition().duration(200)
+      .attr('stroke-opacity', l => isIncomingEdge(l) ? 0.95 : 0.05)
+      .attr('stroke-width', l => isIncomingEdge(l) ? 2.2 : 0.7);
+    nodesSel.transition().duration(200)
+      .attr('opacity', n => {
+        if (n.id === id || n.id === baseId || n.id.startsWith(baseId + '#')) return 1;
+        const hasIncoming = DATA.edges.some(e => {
+          const t = e.target;
+          const s = e.source;
+          return (t === id || t === baseId || t.startsWith(baseId + '#')) && (s === n.id || s.startsWith(n.id + '#'));
+        });
+        return hasIncoming ? 1 : 0.18;
+      });
+  } else if (linkDirection === 'outgoing') {
+    linesSel.transition().duration(200)
+      .attr('stroke-opacity', l => isOutgoingEdge(l) ? 0.95 : 0.05)
+      .attr('stroke-width', l => isOutgoingEdge(l) ? 2.2 : 0.7);
+    nodesSel.transition().duration(200)
+      .attr('opacity', n => {
+        if (n.id === id || n.id === baseId || n.id.startsWith(baseId + '#')) return 1;
+        const hasOutgoing = DATA.edges.some(e => {
+          const s = e.source;
+          const t = e.target;
+          return (s === id || s === baseId || s.startsWith(baseId + '#')) && (t === n.id || t.startsWith(n.id + '#'));
+        });
+        return hasOutgoing ? 1 : 0.18;
+      });
+  } else {
+    // 'all'
+    linesSel.transition().duration(200)
+      .attr('stroke-opacity', l => (isIncomingEdge(l) || isOutgoingEdge(l)) ? 0.85 : 0.12)
+      .attr('stroke-width', l => (isIncomingEdge(l) || isOutgoingEdge(l)) ? 1.8 : 0.9);
+    nodesSel.transition().duration(200)
+      .attr('opacity', n => {
+        if (n.id === id || n.id === baseId || n.id.startsWith(baseId + '#')) return 1;
+        const isConn = DATA.edges.some(e => {
+          const s = e.source, t = e.target;
+          return ((s === id || s === baseId || s.startsWith(baseId + '#')) && (t === n.id || t.startsWith(n.id + '#'))) ||
+                 ((t === id || t === baseId || t.startsWith(baseId + '#')) && (s === n.id || s.startsWith(n.id + '#')));
+        });
+        return isConn ? 1 : 0.22;
+      });
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2463,9 +3135,9 @@ function renderConnectionTable(rows) {
       <tbody>
         \${rows.map(r => \`
           <tr>
-            <td style="font-family:'JetBrains Mono',monospace; color:var(--text-muted); font-size:11.5px;">\${escapeHtml(r.line)}</td>
+            <td style="font-family:var(--font-mono); color:var(--text-muted); font-size:11.5px;">\${escapeHtml(r.line)}</td>
             <td><code>\${escapeHtml(r.symbol.replace(/\`/g, ''))}</code></td>
-            <td style="font-family:'JetBrains Mono',monospace; font-size:11.5px;">\${escapeHtml(r.linksTo)}</td>
+            <td style="font-family:var(--font-mono); font-size:11.5px;">\${escapeHtml(r.linksTo)}</td>
             <td><span class="tree-badge dim">\${escapeHtml(r.edge)}</span></td>
             <td style="font-style:italic; color:var(--text-muted); font-size:12px;">\${escapeHtml(r.why || '—')}</td>
           </tr>
@@ -2526,7 +3198,10 @@ function setupGlobalClickClose() {
   document.addEventListener('click', e => {
     const dropdown = document.getElementById('theme-dropdown');
     const wrapper = document.getElementById('theme-picker-wrapper');
-    if (!wrapper.contains(e.target)) dropdown.classList.remove('open');
+    if (dropdown && wrapper && !wrapper.contains(e.target)) dropdown.classList.remove('open');
+    const fontDropdown = document.getElementById('font-dropdown');
+    const fontWrapper = document.getElementById('font-picker-wrapper');
+    if (fontDropdown && fontWrapper && !fontWrapper.contains(e.target)) fontDropdown.classList.remove('open');
   });
 }
 
@@ -2537,6 +3212,8 @@ function openHome() {
   document.getElementById('doc-content').style.display = 'none';
   stopThreadLoop();
   document.querySelectorAll('.tree-row.active').forEach(r => r.classList.remove('active'));
+  applyGraphDirectionFilter();
+  updateConnectedList('');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

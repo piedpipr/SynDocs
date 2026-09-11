@@ -68,7 +68,12 @@ export function* walkSourceFiles(
   config: SynDocsConfig,
   baseDir = dir,
 ): Iterable<string> {
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
 
   for (const entry of entries) {
     const full = path.join(dir, entry.name);
@@ -93,7 +98,12 @@ export function* walkGuides(guidesRoot: string, cwd: string): Iterable<string> {
 }
 
 function* walkMdFiles(dir: string, base: string): Iterable<string> {
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
   for (const entry of entries) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
