@@ -1,4 +1,3 @@
-```bash
 #!/usr/bin/env bash
 
 # ==============================================================================
@@ -123,8 +122,6 @@ trap 'on_error $LINENO' ERR
 # ==============================================================================
 # Banner
 # ==============================================================================
-
-clear 2>/dev/null || true
 
 echo ""
 printf '%b\n' "${CYAN}${BOLD}"
@@ -483,19 +480,46 @@ else
 fi
 
 # ==============================================================================
-# Optional CodeGraph
+# CodeGraph Integration
 # ==============================================================================
 
 echo ""
+title "CodeGraph Integration"
 
 if command -v codegraph >/dev/null 2>&1; then
-    success "CodeGraph detected"
+    success "CodeGraph is installed and detected"
 else
-    warn "CodeGraph is not installed"
-    detail "Optional: graph, wiki-link and blast-radius features may use CodeGraph."
+    info "CodeGraph is required for full functionality:"
+    detail "• AST-exact micro-doc boundaries"
+    detail "• Symbol impact and downstream blast-radius analysis"
+    detail "• Automated wiki-links and symbol call graphs"
     echo ""
-    detail "Install with:"
-    printf '    %bnpm install -g @colbymchenry/codegraph%b\n' "${CYAN}" "${RESET}"
+
+    install_cg="y"
+    if [[ -t 0 ]]; then
+        printf '  %bWould you like to install CodeGraph globally via npm now? [Y/n]: %b' "${BOLD}${YELLOW}" "${RESET}"
+        read -r reply || reply=""
+        case "$reply" in
+            [nN][oO]|[nN]) install_cg="n" ;;
+            *) install_cg="y" ;;
+        esac
+    elif [[ "${CI:-}" == "true" || "${DEBIAN_FRONTEND:-}" == "noninteractive" ]]; then
+        install_cg="n"
+    fi
+
+    if [[ "$install_cg" == "y" ]]; then
+        info "Installing @colbymchenry/codegraph globally via npm..."
+        if npm install -g @colbymchenry/codegraph; then
+            success "CodeGraph installed successfully"
+        else
+            warn "Could not install CodeGraph globally (permission or network error)."
+            detail "You can install it manually later: npm install -g @colbymchenry/codegraph"
+        fi
+    else
+        info "Skipping CodeGraph installation."
+        detail "SynDocs will use regex boundaries for micro-docs and blast-radius analysis will be disabled."
+        detail "You can install CodeGraph at any time with: npm install -g @colbymchenry/codegraph"
+    fi
 fi
 
 # ==============================================================================
@@ -547,4 +571,3 @@ fi
 echo ""
 printf '%bHappy documenting! 🚀%b\n' "${BOLD}" "${RESET}"
 echo ""
-```
