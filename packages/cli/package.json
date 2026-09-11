@@ -1,0 +1,24 @@
+{
+  "name": "syndocs",
+  "version": "0.1.0",
+  "description": "SynDocs — code-synced documentation with graph connections",
+  "bin": {
+    "syndocs": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@syndocs/core": "*",
+    "@syndocs/graph": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}
