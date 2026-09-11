@@ -7,6 +7,7 @@ import {
   getLangConfig,
   getMicroDocPath,
   getMirrorPath,
+  hashPassword,
   parseAnchors,
   ParsedAnchor,
   renderMicroDoc,
@@ -48,6 +49,17 @@ export async function runInit(opts: InitOptions): Promise<void> {
       const defaultJson = JSON.stringify(config, null, 2) + '\n';
       fs.writeFileSync(cfgPath, defaultJson, 'utf8');
       console.log('  ' + c.green('+ created') + '   syndocs.config.json');
+    }
+
+    const authFile = path.join(cwd, '.syndocs', 'auth.json');
+    if (!fs.existsSync(authFile)) {
+      const { hash, salt } = hashPassword('syndocs');
+      fs.writeFileSync(
+        authFile,
+        JSON.stringify({ hash, salt, createdAt: new Date().toISOString() }, null, 2) + '\n',
+        'utf8',
+      );
+      console.log('  ' + c.green('+ created') + '   .syndocs/auth.json ' + c.dim('(default code: "syndocs" — change with `syndocs auth`)'));
     }
   }
 

@@ -11,6 +11,7 @@ import { runTree }       from './commands/tree';
 import { runLintEmbeds } from './commands/lint-embeds';
 import { runGraphLink }  from './commands/graph-link';
 import { runServe }      from './commands/serve';
+import { runAuth }       from './commands/auth';
 
 const VERSION = '0.2.0';
 
@@ -47,6 +48,9 @@ ${c.bold('Usage:')}
   syndocs serve [--port <n>]
     Start the web UI at http://localhost:4748
     Force-directed graph, rendered markdown, live reload, drift badges.
+
+  syndocs auth [code]
+    Set or update the Web UI edit access code.
 
   syndocs lint-embeds
     Validate @syndocs-embed references in .syndocs/guides/.
@@ -166,6 +170,14 @@ async function main(): Promise<void> {
         cwd,
         config,
         port: parsed.flags.port,
+      });
+      break;
+    }
+
+    case 'auth': {
+      await runAuth({
+        cwd,
+        code: targets[0],
       });
       break;
     }
