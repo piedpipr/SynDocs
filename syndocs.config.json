@@ -1,0 +1,5 @@
+{
+  "docsRoot": "syndocs",
+  "guidesRoot": "guides",
+  "ignore": ["node_modules", ".git", "dist", "build", ".next", "coverage", ".codegraph"]
+}

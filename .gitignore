@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Build output
+packages/*/dist/
+
+# CodeGraph index (local, not committed by default)
+.codegraph/
+
+# OS / editor noise
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/settings.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local

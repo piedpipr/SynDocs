@@ -1,0 +1,15 @@
+{
+  "name": "syndocs-monorepo",
+  "private": true,
+  "workspaces": [
+    "packages/core",
+    "packages/graph",
+    "packages/cli"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}
