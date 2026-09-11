@@ -40,7 +40,7 @@ One bare `@syndocs` per file = whole-file mirror doc.
 syndocs init
 ```
 
-Creates `syndocs/src/auth/Login.php.md` for every marked file, with the current
+Creates `.syndocs/docs/src/auth/Login.php.md` for every marked file (and micro-docs under `.syndocs/microdocs/`), with the current
 code copy and a hash fingerprint. Also runs `codegraph init` if CodeGraph is
 installed (builds the code graph for wiki-links and blast-radius).
 
@@ -87,7 +87,7 @@ you fill in to explain the reason for the connection.
 
 ### 6. Browse
 
-**Obsidian:** Open `syndocs/` as a vault. The graph view maps your code
+**Obsidian:** Open `.syndocs/` as a vault. The graph view maps your code
 dependency structure. Click any node to read its mirror doc.
 
 **Web UI:**
@@ -240,7 +240,7 @@ npm install -g @colbymchenry/codegraph
 
 After installing, `syndocs init` handles `codegraph init` automatically.
 CodeGraph writes to `.codegraph/` (its own directory). SynDocs writes to
-`syndocs/`. They share nothing — CodeGraph is read-only from SynDocs' side.
+`.syndocs/`. They share nothing — CodeGraph is read-only from SynDocs' side.
 
 **Without CodeGraph:** all core features (drift detection, mirror docs, guides,
 web UI) work normally. Graph-specific features degrade gracefully to no-ops.
@@ -260,26 +260,27 @@ web UI) work normally. Graph-specific features degrade gracefully to no-ops.
 ## Project layout
 
 ```
-syndocs/               ← mirror docs and guides (SynDocs)
-  src/auth/Login.php.md
-  src/auth/Session.php.md
-guides/                ← hand-written composed docs
-  auth.md
-.codegraph/            ← CodeGraph's SQLite index (CodeGraph)
-syndocs.config.json    ← optional config
+.syndocs/                  ← hidden SynDocs directory
+  docs/                    ← whole-file mirror docs
+    src/auth/Login.php.md
+  microdocs/               ← micro-docs for specific blocks
+    src/auth/Login.php/validate.md
+  guides/                  ← hand-written composed docs
+    auth.md
+.codegraph/                ← CodeGraph's SQLite index (CodeGraph)
+syndocs.config.json        ← optional config
 ```
 
 ### Config (`syndocs.config.json`)
 
 ```json
 {
-  "docsRoot":   "syndocs",
-  "guidesRoot": "guides",
-  "ignore":     ["node_modules", "dist", ".next"]
+  "docsRoot": ".syndocs/docs",
+  "microdocsRoot": ".syndocs/microdocs",
+  "guidesRoot": ".syndocs/guides",
+  "ignore": ["node_modules", "dist", ".next", ".syndocs"]
 }
 ```
-
-Set `"docsRoot": "docs"` to use the older folder name if migrating from v0.1.
 
 ---
 
