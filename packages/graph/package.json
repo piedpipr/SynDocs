@@ -1,0 +1,17 @@
+{
+  "name": "@syndocs/graph",
+  "version": "0.1.0",
+  "description": "CodeGraph adapter for SynDocs — reads .codegraph/codegraph.db via node:sqlite",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "typescript": "^5.4.5"
+  }
+}
