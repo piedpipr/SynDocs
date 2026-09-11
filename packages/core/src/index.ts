@@ -42,3 +42,11 @@ export {
 
 // Diff
 export { computeDiff } from './differ';
+
+// Authentication
+export {
+  generateSessionToken,
+  hashPassword,
+  verifyPassword,
+  verifySessionToken,
+} from './auth';
