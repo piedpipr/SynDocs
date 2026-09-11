@@ -1,5 +1,5 @@
 # index.ts
-<!-- syndocs-hash: 87ae2255a1e2 -->
+<!-- syndocs-hash: 053bc584998d -->
 
 ```ts
 #!/usr/bin/env -S node --no-warnings=ExperimentalWarning
@@ -16,6 +16,7 @@ import { runLintEmbeds } from './commands/lint-embeds';
 import { runGraphLink }  from './commands/graph-link';
 import { runServe }      from './commands/serve';
 import { runAuth }       from './commands/auth';
+import { runInstallerAction } from './commands/manage';
 
 const VERSION = '0.2.0';
 
@@ -35,10 +36,11 @@ ${c.bold('Usage:')}
     Accepts files or directories as targets (e.g. syndocs check src/).
     --fail exits 1 when stale or missing (CI mode).
 
-  syndocs update [targets...] [--docs] [--microdocs] [--dry-run] [--prune]
+  syndocs update [targets...] [--docs] [--microdocs] [--dry-run] [--prune] [--self]
     Refresh hashes + code copy, and auto-create docs for new annotations.
     Accepts files or directories as targets (e.g. syndocs update packages/core/).
     Keeps orphaned docs safe by default. Use --prune to clean up removed annotations.
+    Use --self (or 'syndocs update self' / 'syndocs self-update') to update SynDocs itself.
 
   syndocs prune [targets...] [--docs] [--microdocs] [--dry-run]
     Remove orphaned mirror docs and micro-docs whose annotations were removed.
@@ -59,6 +61,18 @@ ${c.bold('Usage:')}
 
   syndocs lint-embeds
     Validate @syndocs-embed references in .syndocs/guides/.
+
+  syndocs install
+    Run the SynDocs installer to set up or verify installation.
+
+  syndocs reinstall
+    Clean reinstall of SynDocs via installer (re-clones and rebuilds).
+
+  syndocs self-update
+    Update SynDocs installation to latest git version and rebuild packages.
+
+  syndocs uninstall
+    Remove SynDocs binary symlink and installation directory.
 
 ${c.bold('Collections & Filtering:')}
   [targets...]     Filter by file or directory path (e.g. src/ or packages/core/src/types.ts)
@@ -87,7 +101,9 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  if (parsed.flags.help || !parsed.command) {
+  const isInstallerCmd = ['install', 'reinstall', 'uninstall', 'self-update'].includes(parsed.command)
+    || (parsed.command === 'update' && (parsed.flags.self || parsed.targets.includes('self')));
+  if ((parsed.flags.help && !isInstallerCmd) || !parsed.command) {
     console.log(HELP);
     process.exit(0);
   }
@@ -128,6 +144,11 @@ async function main(): Promise<void> {
     }
 
     case 'update': {
+      if (parsed.flags.self || parsed.targets.includes('self')) {
+        const extraArgs = process.argv.slice(3).filter(a => a !== '--self' && a !== 'self');
+        await runInstallerAction('update', extraArgs);
+        break;
+      }
       await runUpdate({
         cwd,
         config,
@@ -136,6 +157,26 @@ async function main(): Promise<void> {
         dryRun: parsed.flags.dryRun,
         prune: parsed.flags.prune,
       });
+      break;
+    }
+
+    case 'self-update': {
+      await runInstallerAction('update', process.argv.slice(3));
+      break;
+    }
+
+    case 'install': {
+      await runInstallerAction('install', process.argv.slice(3));
+      break;
+    }
+
+    case 'reinstall': {
+      await runInstallerAction('reinstall', process.argv.slice(3));
+      break;
+    }
+
+    case 'uninstall': {
+      await runInstallerAction('uninstall', process.argv.slice(3));
       break;
     }
 
