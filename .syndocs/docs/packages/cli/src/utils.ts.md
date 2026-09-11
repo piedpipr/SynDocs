@@ -1,5 +1,5 @@
 # utils.ts
-<!-- syndocs-hash: 2925b07586fc -->
+<!-- syndocs-hash: e5bb54bd4c14 -->
 
 ```ts
 // @syndocs
@@ -28,14 +28,16 @@ export const c = {
 
 export interface SynDocsConfig {
   docsRoot: string;
+  microdocsRoot: string;
   guidesRoot: string;
   ignore: string[];
 }
 
 const DEFAULT_CONFIG: SynDocsConfig = {
-  docsRoot: 'syndocs',    // renamed from 'docs' — set "docsRoot":"docs" to keep old layout
-  guidesRoot: 'guides',
-  ignore: ['node_modules', '.git', 'dist', 'build', '.next', 'coverage', 'syndocs', '.codegraph', 'graphify-out'],
+  docsRoot: '.syndocs/docs',
+  microdocsRoot: '.syndocs/microdocs',
+  guidesRoot: '.syndocs/guides',
+  ignore: ['node_modules', '.git', 'dist', 'build', '.next', 'coverage', '.syndocs', 'syndocs', '.codegraph', 'graphify-out'],
 };
 
 export function loadConfig(cwd: string): SynDocsConfig {
@@ -82,6 +84,8 @@ export function* walkSourceFiles(
       if (config.ignore.some(p => entry.name === p || rel.startsWith(p + '/'))) continue;
       if (isUnderDocsRoot(rel, config.docsRoot)) continue;
       if (rel.startsWith(config.guidesRoot + '/') || rel === config.guidesRoot) continue;
+      if (rel.startsWith(config.microdocsRoot + '/') || rel === config.microdocsRoot) continue;
+      if (rel.startsWith('.syndocs/') || rel === '.syndocs') continue;
       yield* walkSourceFiles(full, config, baseDir);
     } else if (entry.isFile()) {
       if (getLangConfig(entry.name)) yield rel;
@@ -113,6 +117,12 @@ export function* walkMirrorDocs(docsRoot: string, cwd: string): Iterable<string>
   yield* walkMdFiles(full, cwd);
 }
 
+export function* walkMicroDocs(microdocsRoot: string, cwd: string): Iterable<string> {
+  const full = path.join(cwd, microdocsRoot);
+  if (!fs.existsSync(full)) return;
+  yield* walkMdFiles(full, cwd);
+}
+
 export function ensureDir(dirPath: string): void {
   fs.mkdirSync(dirPath, { recursive: true });
 }
@@ -124,6 +134,102 @@ export function readFileSafe(filePath: string): string | null {
 export function writeFile(filePath: string, content: string): void {
   ensureDir(path.dirname(filePath));
   fs.writeFileSync(filePath, content, 'utf8');
+}
+
+// ─── CLI argument parsing & target resolution ─────────────────────────────────
+
+export interface ParsedArgs {
+  command: string;
+  targets: string[];
+  flags: {
+    dryRun?: boolean;
+    fail?: boolean;
+    blastRadius?: boolean;
+    skipCodegraph?: boolean;
+    prune?: boolean;
+    docs?: boolean;
+    microdocs?: boolean;
+    all?: boolean;
+    stale?: boolean;
+    orphans?: boolean;
+    cwd?: string;
+    port?: number;
+    help?: boolean;
+    version?: boolean;
+    [key: string]: any;
+  };
+}
+
+export function parseCliArgs(argv: string[]): ParsedArgs {
+  const flags: Record<string, any> = {
+    blastRadius: true,
+  };
+  const targets: string[] = [];
+  let command = '';
+
+  const optionsWithArgs = new Set(['--cwd', '--port', '-p']);
+
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+
+    if (!command && !arg.startsWith('-')) {
+      command = arg;
+      continue;
+    }
+
+    if (arg === '--version' || arg === '-v') {
+      flags.version = true;
+    } else if (arg === '--help' || arg === '-h') {
+      flags.help = true;
+    } else if (arg === '--dry-run') {
+      flags.dryRun = true;
+    } else if (arg === '--fail' || arg === '--fail-on-stale') {
+      flags.fail = true;
+    } else if (arg === '--no-blast-radius') {
+      flags.blastRadius = false;
+    } else if (arg === '--blast-radius') {
+      flags.blastRadius = true;
+    } else if (arg === '--skip-codegraph') {
+      flags.skipCodegraph = true;
+    } else if (arg === '--prune') {
+      flags.prune = true;
+    } else if (arg === '--docs') {
+      flags.docs = true;
+    } else if (arg === '--microdocs') {
+      flags.microdocs = true;
+    } else if (arg === '--all') {
+      flags.all = true;
+    } else if (arg === '--stale') {
+      flags.stale = true;
+    } else if (arg === '--orphans') {
+      flags.orphans = true;
+    } else if (optionsWithArgs.has(arg)) {
+      const next = argv[++i];
+      if (arg === '--cwd') flags.cwd = next;
+      else if (arg === '--port' || arg === '-p') flags.port = parseInt(next, 10);
+    } else if (arg.startsWith('--cwd=')) {
+      flags.cwd = arg.slice(6);
+    } else if (arg.startsWith('--port=')) {
+      flags.port = parseInt(arg.slice(7), 10);
+    } else if (!arg.startsWith('-')) {
+      targets.push(arg);
+    }
+  }
+
+  return { command, targets, flags };
+}
+
+/**
+ * Checks if a given relative file path matches the specified target filters (files or directories).
+ * If no targets are provided, returns true.
+ */
+export function matchesTargets(relPath: string, targets: string[]): boolean {
+  if (!targets || targets.length === 0) return true;
+  const norm = relPath.replace(/\\/g, '/').replace(/^\.\//, '');
+  return targets.some(target => {
+    const normTarget = target.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '');
+    return norm === normTarget || norm.startsWith(normTarget + '/');
+  });
 }
 ```
 

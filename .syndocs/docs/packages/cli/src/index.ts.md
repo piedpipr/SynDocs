@@ -1,15 +1,17 @@
 # index.ts
-<!-- syndocs-hash: 60cb5d5fc862 -->
+<!-- syndocs-hash: a756c9ae524a -->
 
 ```ts
 #!/usr/bin/env -S node --no-warnings=ExperimentalWarning
 // @syndocs
 
 import path from 'path';
-import { loadConfig, c } from './utils';
+import { loadConfig, parseCliArgs, c } from './utils';
 import { runInit }       from './commands/init';
 import { runCheck }      from './commands/check';
 import { runUpdate }     from './commands/update';
+import { runPrune }      from './commands/prune';
+import { runTree }       from './commands/tree';
 import { runLintEmbeds } from './commands/lint-embeds';
 import { runGraphLink }  from './commands/graph-link';
 import { runServe }      from './commands/serve';
@@ -22,42 +24,49 @@ ${c.bold('SynDocs')} v${VERSION} — code-synced documentation with graph connec
 ${c.bold('Usage:')}
 
   syndocs init [--dry-run] [--skip-codegraph]
-    Create mirror docs for every @syndocs-marked file.
+    One-time initialization for a repository.
+    Creates .syndocs/ structure (docs, microdocs, guides) and initial documentation.
     Runs codegraph init automatically if CodeGraph is installed.
 
-  syndocs check [--no-annotate] [--fail] [--no-blast-radius]
-    Detect drift. --fail exits 1 when stale (CI mode).
-    --no-annotate keeps check read-only (no writes to mirror docs).
+  syndocs check [targets...] [--docs] [--microdocs] [--fail] [--no-blast-radius]
+    Strictly read-only inspection. Detects drift, missing docs, and removed annotations.
+    Accepts files or directories as targets (e.g. syndocs check src/).
+    --fail exits 1 when stale or missing (CI mode).
 
-  syndocs update [file ...] [--dry-run]
-    Refresh hash + code copy, clear pending diffs.
-    Uses CodeGraph for AST-exact micro-doc boundaries when available.
+  syndocs update [targets...] [--docs] [--microdocs] [--dry-run] [--prune]
+    Refresh hashes + code copy, and auto-create docs for new annotations.
+    Accepts files or directories as targets (e.g. syndocs update packages/core/).
+    Keeps orphaned docs safe by default. Use --prune to clean up removed annotations.
+
+  syndocs prune [targets...] [--docs] [--microdocs] [--dry-run]
+    Remove orphaned mirror docs and micro-docs whose annotations were removed.
+
+  syndocs tree [targets...] [--docs] [--microdocs] [--stale]
+    Visualize documentation hierarchy tree with status badges, line counts, and stats.
 
   syndocs graph-link [--dry-run]
     Write [[wiki-links]] into mirror docs from CodeGraph edges.
-    Open syndocs/ as an Obsidian vault for the connected graph view.
+    Open .syndocs/ as an Obsidian vault for the connected graph view.
 
   syndocs serve [--port <n>]
     Start the web UI at http://localhost:4748
     Force-directed graph, rendered markdown, live reload, drift badges.
 
   syndocs lint-embeds
-    Validate @syndocs-embed references in guides/.
+    Validate @syndocs-embed references in .syndocs/guides/.
+
+${c.bold('Collections & Filtering:')}
+  [targets...]     Filter by file or directory path (e.g. src/ or packages/core/src/types.ts)
+  --docs           Only whole-file mirror docs (.syndocs/docs/)
+  --microdocs      Only micro-docs (.syndocs/microdocs/)
+  --all            Both docs and micro-docs (default)
 
 ${c.bold('Markers:')}
-
   // @syndocs                whole-file doc  (JS/TS/PHP/Go/...)
   # @syndocs                 whole-file doc  (Python/Ruby/YAML/...)
   // @syndocs: label          micro-doc for a specific block
   @syndocs-embed: path        embed in a composed guide
   @syndocs-embed: path#label  embed one specific micro-doc
-
-${c.bold('Graph features')} need CodeGraph (npm i -g @colbymchenry/codegraph):
-  syndocs init     — also runs codegraph init
-  syndocs graph-link — writes [[wiki-links]] for Obsidian or web UI
-
-${c.bold('Config')} — syndocs.config.json:
-  { "docsRoot": "syndocs", "guidesRoot": "guides", "ignore": ["node_modules"] }
 
 ${c.bold('Options:')}
   --cwd <path>     Run as if in this directory
@@ -66,67 +75,113 @@ ${c.bold('Options:')}
 `.trimStart();
 
 async function main(): Promise<void> {
-  const args = process.argv.slice(2);
+  const parsed = parseCliArgs(process.argv.slice(2));
 
-  if (args.includes('--version') || args.includes('-v')) {
-    console.log('syndocs v' + VERSION); process.exit(0);
-  }
-  if (args.includes('--help') || args.includes('-h') || args.length === 0) {
-    console.log(HELP); process.exit(0);
+  if (parsed.flags.version) {
+    console.log('syndocs v' + VERSION);
+    process.exit(0);
   }
 
-  const cwdFlag = args.includes('--cwd') ? args[args.indexOf('--cwd') + 1] : undefined;
-  const cwd     = cwdFlag ? path.resolve(cwdFlag) : process.cwd();
-  const config  = loadConfig(cwd);
-  const command = args[0];
+  if (parsed.flags.help || !parsed.command) {
+    console.log(HELP);
+    process.exit(0);
+  }
 
-  switch (command) {
-    case 'init':
+  const cwd = parsed.flags.cwd ? path.resolve(parsed.flags.cwd) : process.cwd();
+  const config = loadConfig(cwd);
+  const targets = parsed.targets;
+
+  const collection: 'all' | 'docs' | 'microdocs' = parsed.flags.docs
+    ? 'docs'
+    : parsed.flags.microdocs
+      ? 'microdocs'
+      : 'all';
+
+  switch (parsed.command) {
+    case 'init': {
       await runInit({
-        cwd, config,
-        dryRun:        args.includes('--dry-run'),
-        skipCodegraph: args.includes('--skip-codegraph'),
+        cwd,
+        config,
+        dryRun: parsed.flags.dryRun,
+        skipCodegraph: parsed.flags.skipCodegraph,
       });
       break;
+    }
 
     case 'check': {
       const code = await runCheck({
-        cwd, config,
-        annotate:    !args.includes('--no-annotate'),
-        failOnStale:  args.includes('--fail'),
-        blastRadius: !args.includes('--no-blast-radius'),
+        cwd,
+        config,
+        targets,
+        collection,
+        failOnStale: parsed.flags.fail,
+        blastRadius: parsed.flags.blastRadius,
       });
       process.exit(code);
+      break;
     }
 
-    case 'update':
+    case 'update': {
       await runUpdate({
-        cwd, config,
-        dryRun: args.includes('--dry-run'),
-        files:  args.slice(1).filter(a => !a.startsWith('--')),
+        cwd,
+        config,
+        targets,
+        collection,
+        dryRun: parsed.flags.dryRun,
+        prune: parsed.flags.prune,
       });
       break;
+    }
 
-    case 'graph-link':
-      await runGraphLink({
-        cwd, config,
-        dryRun: args.includes('--dry-run'),
+    case 'prune': {
+      await runPrune({
+        cwd,
+        config,
+        targets,
+        collection,
+        dryRun: parsed.flags.dryRun,
       });
       break;
+    }
+
+    case 'tree': {
+      await runTree({
+        cwd,
+        config,
+        targets,
+        collection,
+        staleOnly: parsed.flags.stale,
+        orphansOnly: parsed.flags.orphans,
+      });
+      break;
+    }
+
+    case 'graph-link': {
+      await runGraphLink({
+        cwd,
+        config,
+        dryRun: parsed.flags.dryRun,
+      });
+      break;
+    }
 
     case 'serve': {
-      const portFlag = args.includes('--port') ? parseInt(args[args.indexOf('--port') + 1], 10) : undefined;
-      await runServe({ cwd, config, port: portFlag });
+      await runServe({
+        cwd,
+        config,
+        port: parsed.flags.port,
+      });
       break;
     }
 
     case 'lint-embeds': {
       const code = await runLintEmbeds({ cwd, config });
       process.exit(code);
+      break;
     }
 
     default:
-      console.error(c.red('Error:') + ' unknown command "' + command + '"');
+      console.error(c.red('Error:') + ' unknown command "' + parsed.command + '"');
       console.log('Run ' + c.bold('syndocs --help') + ' to see available commands.');
       process.exit(1);
   }

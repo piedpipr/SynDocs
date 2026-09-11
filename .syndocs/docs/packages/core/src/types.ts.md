@@ -1,5 +1,5 @@
 # types.ts
-<!-- syndocs-hash: 0c71413a11a1 -->
+<!-- syndocs-hash: 16a73b13d77b -->
 
 ```ts
 // @syndocs
@@ -62,11 +62,13 @@ export interface EmbedSection {
 // ─── Results from syndocs check ───────────────────────────────────────────────
 
 export type CheckStatus =
-  | 'ok'             // hash matches
-  | 'stale'          // hash mismatch, diff generated
-  | 'missing-doc'    // @syndocs found but no mirror doc yet
-  | 'missing-source' // mirror doc exists but source file is gone
-  | 'no-hash';       // mirror doc has no hash yet (freshly init'd)
+  | 'ok'                       // hash matches
+  | 'stale'                    // hash mismatch, diff generated
+  | 'missing-doc'              // @syndocs found but no mirror doc yet
+  | 'missing-source'           // mirror doc exists but source file is gone
+  | 'annotation-removed'       // mirror doc exists but whole-file @syndocs removed from source
+  | 'micro-annotation-removed' // micro-doc exists but @syndocs: label removed from source
+  | 'no-hash';                 // mirror doc has no hash yet (freshly init'd)
 
 export interface CheckResult {
   sourceFile: string;
@@ -75,6 +77,9 @@ export interface CheckResult {
   currentHash?: string;
   storedHash?: string;
   diff?: string;
+  isMicroDoc?: boolean;
+  targetLabel?: string;
+  notes?: string;
 }
 
 // ─── Results from syndocs lint-embeds ────────────────────────────────────────

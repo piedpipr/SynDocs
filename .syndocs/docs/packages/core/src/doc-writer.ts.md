@@ -1,5 +1,5 @@
 # doc-writer.ts
-<!-- syndocs-hash: 373b5efadae2 -->
+<!-- syndocs-hash: bc642e16b7cf -->
 
 ```ts
 // @syndocs
@@ -131,6 +131,35 @@ export function renderEmbedBlock(
     '```' + codeLanguage,
     codeContent.trimEnd(),
     '```',
+    '',
+  ];
+
+  return lines.join('\n');
+}
+
+/**
+ * Render a standalone micro-doc to markdown.
+ */
+export function renderMicroDoc(
+  sourceFile: string,
+  label: string,
+  codeContent: string,
+  codeLanguage: string,
+  hash: string,
+  notes?: string,
+): string {
+  const lines: string[] = [
+    `# @syndocs: ${label}`,
+    `> Source: \`${sourceFile}\``,
+    `<!-- syndocs-hash: ${hash} -->`,
+    '',
+    '```' + codeLanguage,
+    codeContent.trimEnd(),
+    '```',
+    '',
+    '## Notes',
+    '',
+    notes && notes.trim() ? notes.trim() : '> _Add documentation notes here._',
     '',
   ];
 
