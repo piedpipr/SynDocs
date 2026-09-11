@@ -1,5 +1,5 @@
 # html.ts
-<!-- syndocs-hash: c0e4fcaa6cee -->
+<!-- syndocs-hash: 5bb349b1c6d6 -->
 
 ```ts
 // @syndocs
@@ -764,7 +764,14 @@ html, body {
       <div id="empty-state">
         <div class="empty-icon">📚</div>
         <div style="font-size:16px; font-weight:600; color:#fff;">SynDocs Interactive Studio</div>
-        <div>Select a document from the left sidebar or click any node in the graph to begin.</div>
+        <div style="max-width: 460px; line-height: 1.5; color: var(--text-muted);">
+          Select a document from the left sidebar or click any node in the graph to begin.
+        </div>
+        <div style="margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;">
+          <button class="action-btn primary" onclick="openDoc('guides/internal/quickstart.md')">⚡ Quickstart Guide</button>
+          <button class="action-btn" onclick="openDoc('guides/internal/annotations.md')">🏷️ Syntax Reference</button>
+          <button class="action-btn" onclick="openDoc('guides/internal/cli-reference.md')">🛠️ CLI Reference</button>
+        </div>
       </div>
       <div id="doc-content" style="display:none;"></div>
     </div>
@@ -821,6 +828,12 @@ document.addEventListener('DOMContentLoaded', () => {
   checkAuthStatus();
   setupAuthModal();
   setupWindowResize();
+
+  // If repository has no custom docs yet, auto-open the Quickstart Guide!
+  const hasRepoDocs = DATA.nodes.some(n => n.type === 'doc');
+  if (!hasRepoDocs && DATA.docs['guides/internal/quickstart.md']) {
+    openDoc('guides/internal/quickstart.md');
+  }
 });
 
 // ─── Authentication ─────────────────────────────────────────────────────────

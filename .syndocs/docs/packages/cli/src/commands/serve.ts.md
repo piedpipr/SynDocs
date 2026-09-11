@@ -1,5 +1,5 @@
 # serve.ts
-<!-- syndocs-hash: 98600f240922 -->
+<!-- syndocs-hash: d38bf658fe41 -->
 
 ```ts
 // @syndocs
@@ -19,6 +19,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { HTML_TEMPLATE } from '../web/html';
+import { INTERNAL_GUIDES } from '../web/internal-docs';
 import {
   computeHash,
   getLangConfig,
@@ -451,7 +452,7 @@ async function buildData(cwd: string, config: SynDocsConfig): Promise<SynDocsDat
     }
   }
 
-  // 3. Process guides
+  // 3. Process guides (both user project guides and built-in internal guides)
   for (const guideRel of walkGuides(config.guidesRoot, cwd)) {
     const guideAbs = path.join(cwd, guideRel);
     const content = readFileSafe(guideAbs);
@@ -478,6 +479,30 @@ async function buildData(cwd: string, config: SynDocsConfig): Promise<SynDocsDat
       tokens: [],
       downstream: [],
     };
+  }
+
+  // 3b. Built-in SynDocs internal guides (always available)
+  for (const internal of INTERNAL_GUIDES) {
+    if (!docs[internal.id]) {
+      nodes.push({
+        id: internal.id,
+        label: internal.title,
+        status: 'ok',
+        group: 'guides/internal',
+        type: 'guide',
+      });
+
+      docs[internal.id] = {
+        title: internal.title,
+        content: internal.content,
+        status: 'ok',
+        type: 'guide',
+        sourceFile: internal.id,
+        notes: internal.content,
+        tokens: [],
+        downstream: [],
+      };
+    }
   }
 
   // 4. Incorporate all CodeGraph structural edges directly if ready
@@ -572,12 +597,26 @@ function buildDocsTree(nodes: DocNode[]): TreeNode {
       const [parentPath, label] = node.id.split('#');
       addPathToTree(docsDir, parentPath, { ...node, id: node.id, label: '#' + label }, true);
     } else if (node.type === 'guide') {
-      guidesDir.children!.push({
-        name: node.label,
-        path: node.id,
-        type: 'guide',
-        status: node.status,
-      });
+      if (node.id.startsWith('guides/internal/')) {
+        let internalDir = guidesDir.children!.find(c => c.name === 'SynDocs Guides' && c.type === 'dir');
+        if (!internalDir) {
+          internalDir = { name: 'SynDocs Guides', path: '.syndocs/guides/internal', type: 'dir', children: [] };
+          guidesDir.children!.push(internalDir);
+        }
+        internalDir.children!.push({
+          name: node.label,
+          path: node.id,
+          type: 'guide',
+          status: node.status,
+        });
+      } else {
+        guidesDir.children!.push({
+          name: node.label,
+          path: node.id,
+          type: 'guide',
+          status: node.status,
+        });
+      }
     }
   }
 

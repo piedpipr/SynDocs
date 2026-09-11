@@ -1,224 +1,320 @@
 # SynDocs
 
-**Code-synced documentation with a connected graph.** Drop one comment into a source file. SynDocs keeps a matching mirror doc alongside it, detects drift when the code changes, and — with CodeGraph — wires every doc to the files it depends on so you can browse the whole codebase as a connected graph in Obsidian or the built-in web UI.
+**Code-synced documentation with a connected knowledge graph.** Drop a concise comment into any source file. SynDocs creates a matching mirror doc alongside it, tracks code drift with cryptographic hash stamps, embeds scoped micro-docs directly into parent mirror docs (Notion-style), and — with CodeGraph — maps every doc to its dependencies so you can explore your entire codebase as an interactive connected graph in Obsidian or the built-in Web Studio.
 
 ---
+
 ## Quick Install
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/piedpipr/SynDocs/main/install.sh | bash
 ```
 
-## Quick start using npm/npx (not available at the moment)
-
+Or install specific management operations:
 ```bash
-# Install (once published to npm)
-npm install -g syndocs
-
-# Or run without installing
-npx syndocs --help
+./install.sh install      # Install or sync
+./install.sh reinstall    # Clean reinstall from scratch
+./install.sh update       # Update from git origin and rebuild
+./install.sh uninstall    # Remove binary symlink and directory
 ```
 
-### 1. Mark a file as documented
+Once installed, you can also manage SynDocs directly from the CLI:
+```bash
+syndocs install
+syndocs reinstall
+syndocs self-update
+syndocs uninstall
+```
 
-```js
-// @syndocs
+---
+
+## Quickstart
+
+### 1. Annotate your code
+Add a marker to any source file:
+
+```ts
+// @synd
+export class AuthService { ... }
 ```
 ```python
-# @syndocs
+# @synd
+class PaymentProcessor: ...
 ```
-```php
-// @syndocs: rate-limit-check
-public function checkRateLimit(string $email): void { ... }
+Or annotate a specific function, class, or block:
+```ts
+// @synd: rate-limit-check
+export function checkRateLimit(email: string): void { ... }
+```
+Or use **trailing inline annotations** on fields, variables, or constants:
+```ts
+const MAX_ATTEMPTS = 5; // @synd
 ```
 
-One bare `@syndocs` per file = whole-file mirror doc.
-`@syndocs: label` above a function or block = micro-doc for that specific piece.
+Both `@synd` (concise shorthand) and `@syndocs` are supported across all languages.
+
+---
 
 ### 2. Create mirror docs
-
 ```bash
 syndocs init
 ```
+- Sets up `.syndocs/` directory structure and `syndocs.config.json`.
+- Prompts for a Web UI editing access code (stored with PBKDF2 hashing in `.syndocs/auth.json`).
+- Creates `.syndocs/docs/<path>.md` for every marked file with initial code snapshots, hash fingerprints, and embedded micro-doc sections.
+- Seeds an introductory guide in `.syndocs/guides/architecture.md`.
+- Automatically initializes CodeGraph if installed.
 
-Creates `.syndocs/docs/src/auth/Login.php.md` for every marked file (and micro-docs under `.syndocs/microdocs/`), with the current
-code copy and a hash fingerprint. Also runs `codegraph init` if CodeGraph is
-installed (builds the code graph for wiki-links and blast-radius).
+---
 
-### 3. Check for drift
-
+### 3. Check for code drift (Strictly Read-Only)
 ```bash
 syndocs check
 ```
+- Compares live source code against stored mirror doc hashes.
+- Never modifies files on disk (safe for CI pipelines with `--fail`).
+- Displays colored diffs for stale sections.
+- Shows downstream blast-radius: which other documented modules depend on the drifted code.
 
-Compares the live file hash against the stored hash. On a mismatch, writes the
-diff directly into the mirror doc:
+---
 
-```markdown
-<!-- syndocs-pending-start -->
-## ⚠ Pending changes
-```diff
--    if ($attempts > 5) {
-+    if ($attempts >= $this->maxAttempts) {
-```
-<!-- syndocs-pending-end -->
-```
-
-With CodeGraph: also warns which other documented files depend on the stale one.
-
-### 4. Resolve
-
-Write your Notes update, then:
-
+### 4. Update documentation
 ```bash
-syndocs update src/auth/Login.php
+syndocs update
+# Or target specific paths:
+syndocs update packages/core/
 ```
+- Refreshes hashes and code copies.
+- Preserves all your human-written documentation notes.
+- Automatically creates embedded blocks for newly added annotations.
+- Use `syndocs update --prune` to clean up deleted annotations simultaneously.
 
-Refreshes the hash, updates the code copy, and removes the pending-diff block.
+---
 
-### 5. Wire the graph
+### 5. Visualize hierarchy tree
+```bash
+syndocs tree
+```
+- Displays an interactive Unicode tree hierarchy.
+- Micro-docs appear neatly nested under their parent files (`#rate-limit-check [ok]`).
+- Shows line counts, hash fingerprints, status badges (`[ok]`, `[stale]`, `[missing]`), and blast-radius dependency counters (`⚡ N deps`).
 
+---
+
+### 6. Connect the graph
 ```bash
 syndocs graph-link
 ```
+Reads CodeGraph edges (calls, imports, extends) and writes Obsidian-compatible `[[wiki-links]]` with editable **Why** rationale columns into your mirror docs.
 
-Reads CodeGraph edges (calls, imports, extends) and writes Obsidian-compatible
-`[[wiki-links]]` into each mirror doc. Each link row also has a **Why** column
-you fill in to explain the reason for the connection.
+---
 
-### 6. Browse
-
-**Obsidian:** Open `.syndocs/` as a vault. The graph view maps your code
-dependency structure. Click any node to read its mirror doc.
-
-**Web UI:**
-
+### 7. Launch the Web Studio
 ```bash
 syndocs serve
 # → http://localhost:4748
 ```
-
-Force-directed graph, rendered markdown, drift status badges, live reload as
-you edit docs.
+Opens the interactive Documentation Studio:
+- **Dual-Tab Sidebar**: Browse the Docs Tree and Codebase Tree.
+- **Built-in Internal Guides**: SynDocs user guide and references are built right into the studio.
+- **Interactive AST Anchors**: Hover over symbols to inspect relations and definitions.
+- **Dynamic SVG Threads**: Visual spline curves connecting code tokens to graph nodes.
+- **Password-Protected Notes Editor**: Edit documentation notes safely right in your browser.
 
 ---
 
-## Marker syntax
+## Marker Syntax & `@synd` Shorthand
 
 ### In source files
 
-| Syntax | Meaning |
-|--------|---------|
-| `// @synd` or `// @syndocs` | Whole-file doc (or auto-scoped if placed directly above a function, class, etc.) |
-| `# @synd` or `# @syndocs` | Whole-file doc / auto-scoped (Python, Ruby, YAML, etc.) |
-| `// @synd: label` or `// @syndocs: label` | Explicitly named micro-doc for the immediately following block |
-| `code... // @synd` | **Trailing inline annotation** (right side of line) — auto-scopes to that field, variable, schema, or block |
-| `<!-- @synd -->` or `<!-- @syndocs -->` | Whole-file / auto-scoped doc (HTML/XML) |
-| `/* @synd: label */` | Micro-doc (CSS/SCSS) |
+| Language Family | Comment Style | Whole-File / Scoped | Explicit Micro-Doc | Trailing Inline Annotation |
+|-----------------|---------------|---------------------|--------------------|----------------------------|
+| TS, JS, Java, C#, C++, Go, Rust, PHP, Swift, Kotlin | `//` | `// @synd` | `// @synd: label` | `code... // @synd` |
+| Python, Ruby, YAML, Bash, Shell, Dockerfile | `#` | `# @synd` | `# @synd: label` | `code... # @synd` |
+| HTML, XML, Markdown, Svelte, Vue | `<!--` | `<!-- @synd -->` | `<!-- @synd: label -->` | `code... <!-- @synd -->` |
+| CSS, SCSS, Less | `/*` | `/* @synd */` | `/* @synd: label */` | `code... /* @synd */` |
+| SQL, Lua, Haskell | `--` | `-- @synd` | `-- @synd: label` | `code... -- @synd` |
 
-> **Notion-like Embedded Architecture:** All micro-docs are embedded directly within their parent mirror doc (`.syndocs/docs/path/to/file.ext.md`) as modular sections separated by `---` and `## @synd: label`. There is no separate `microdocs/` directory to manage.
+*(Both `@synd` and `@syndocs` prefixes are fully supported)*
 
-### In composed guides (`guides/`)
+### Trailing Inline Annotations & Auto-Scoping
+When an annotation is placed on the right side of a line (`const PORT = 3000; // @synd`), SynDocs automatically identifies the declaration type (variable, constant, field, schema element) and scopes the micro-doc to that specific line or block.
+
+When placed above a declaration, SynDocs uses Tree-sitter AST queries via CodeGraph (or regex indentation/brace boundary parsing) to detect the element name and exact boundary lines automatically.
+
+### In composed guides (`.syndocs/guides/`)
 
 ```markdown
-@synd-embed: src/auth/Login.php
-@synd-embed: src/auth/Login.php#rate-limit-check
+# System Architecture
+
+Here is the authentication entrypoint:
+@synd-embed: packages/core/src/auth.ts
+
+Here is the token validation routine:
+@synd-embed: packages/core/src/auth.ts#validate-token
 ```
 *(Both `@synd-embed:` and `@syndocs-embed:` are supported)*
 
-Each embed carries its own `<!-- syndocs-synced: hash -->` stamp and gets its
-own independent drift check.
+Run `syndocs lint-embeds` anytime to validate that all embed references point to existing files and labels.
 
 ---
 
-## Commands
+## Notion-like Embedded Micro-Doc Architecture
 
-```
-syndocs init [--dry-run] [--skip-codegraph]
-  Scan for @synd / @syndocs markers, create missing mirror docs with embedded sections.
-  Runs codegraph init automatically if CodeGraph is on PATH.
+All micro-docs are embedded directly inside their parent mirror doc file (`.syndocs/docs/<path>.md`). There are no separate `microdocs/` directories or scattered files.
 
-syndocs check [targets...] [--docs] [--microdocs] [--fail] [--no-blast-radius]
-  Detect drift across whole files and embedded micro-doc sections.
-  Use --fail in CI to exit 1 when anything is stale.
-
-syndocs update [targets...] [--docs] [--microdocs] [--dry-run] [--prune]
-  Refresh hashes + code copies, auto-create embedded sections for new annotations.
-  Uses CodeGraph for AST-exact micro-doc boundaries when available.
-
-syndocs prune [targets...] [--dry-run]
-  Clean up orphaned sections or docs whose annotations were removed from source.
-
-syndocs tree [targets...] [--stale]
-  Visualize documentation hierarchy tree with micro-docs nested directly under parent files.
-
-syndocs graph-link [--dry-run]
-  Write [[wiki-links]] into mirror docs from CodeGraph call/import edges.
-
-syndocs serve [--port <n>]
-  Start the web UI at http://localhost:4748
-  D3 force graph, nested document hierarchy, live reload, drift badges.
-
-syndocs lint-embeds
-  Validate all @synd-embed / @syndocs-embed references in guides/ files.
-
-syndocs install | reinstall | self-update | uninstall
-  Manage SynDocs installation and binaries directly via the CLI.
-```
-
----
-
-## Mirror doc format
+### Mirror Doc Format
 
 ```markdown
 # Login.php
 <!-- syndocs-hash: 345a1c0b7eca -->
 
-```php
-...current contents of Login.php...
-```
+\`\`\`php
+...whole-file contents...
+\`\`\`
 
 <!-- syndocs-graph-start -->
 | Line | Symbol | Links to | Edge | Why |
 |------|--------|----------|------|-----|
-| 4 | `use App\Auth\Session` | [[Session.php]] | imports | |
-| 18 | `$session->validate()` | [[Session.php#validate-token]] | calls | Token validation here not middleware — prevents timing attacks |
+| 4 | \`use App\\Auth\\Session\` | [[Session.php]] | imports | |
+| 18 | \`$session->validate()\` | [[Session.php#validate-token]] | calls | Token validation here not middleware — prevents timing attacks |
 <!-- syndocs-graph-end -->
 
 ## Notes
-Explain decisions, gotchas, non-obvious behaviour here.
-```
-
-The `<!-- syndocs-graph-start/end -->` block is written by `syndocs graph-link`
-and updated on each rerun. The **Why** column is yours to fill in. Everything
-else is managed automatically.
+High-level architectural notes for Login.php.
 
 ---
 
-## Connection docs — the Why column
+## @synd: rate-limit-check
+> 🔍 function · \`checkRateLimit\` · lines 30–42
+<!-- syndocs-hash: 8f31b2e04a11 -->
 
-When CodeGraph finds that `Login.php` calls `Session::validate()`, it creates
-the table row. The Why cell starts empty. Fill it in to explain the design
-decision at that call site:
+\`\`\`php
+public function checkRateLimit(string $email): void {
+    if ($attempts >= $this->maxAttempts) {
+        throw new TooManyRequestsException();
+    }
+}
+\`\`\`
 
-```markdown
-| 18 | `$session->validate()` | [[Session.php#validate-token]] | calls | Validation here not in middleware — prevents timing attacks that could reveal whether a session token exists |
+### Notes
+Explain specific algorithmic decisions, rate limiting buckets, or gotchas here.
 ```
 
-For connections where no rationale exists yet, run:
+- Each section has an independent hash fingerprint and code copy.
+- The `> 🔍` breadcrumb shows the auto-detected code element and line range.
+- Human notes in all sections are completely preserved across `syndocs update` runs.
+
+---
+
+## Commands Reference
+
+```
+syndocs init [access-code] [--access-code <code>] [--dry-run] [--skip-codegraph]
+  One-time repository setup. Creates .syndocs/ structure, sets up auth.json,
+  generates mirror docs for all annotated files, and runs codegraph init.
+
+syndocs check [targets...] [--docs] [--microdocs] [--fail] [--no-blast-radius]
+  Strictly read-only drift inspection. Compares live file hashes with stored
+  hashes without touching files. Use --fail in CI to exit 1 on drift.
+
+syndocs update [targets...] [--docs] [--microdocs] [--dry-run] [--prune] [--self]
+  Refresh hashes and code copies, auto-create embedded sections for new
+  annotations, and preserve human notes. Use --prune to clean up removed anchors.
+
+syndocs prune [targets...] [--docs] [--microdocs] [--dry-run]
+  Safely removes orphaned mirror docs and embedded micro-doc sections whose
+  annotations were deleted from source code.
+
+syndocs tree [targets...] [--docs] [--microdocs] [--stale]
+  Visualizes documentation hierarchy tree with micro-docs nested under parent
+  files, line counts, status badges, and blast-radius counters.
+
+syndocs graph-link [--dry-run]
+  Writes Obsidian-compatible [[wiki-links]] into mirror docs from CodeGraph edges.
+
+syndocs serve [--port <n>]
+  Launches the Web UI Documentation Studio at http://localhost:4748 with
+  force graph, dual tree, SVG connection threads, live reload, and built-in guides.
+
+syndocs auth [code]
+  Sets or updates the Web UI editing access code.
+
+syndocs lint-embeds
+  Validates all @synd-embed / @syndocs-embed references in .syndocs/guides/.
+
+syndocs install | reinstall | self-update | uninstall
+  Manages SynDocs installation and binaries directly via the CLI.
+```
+
+---
+
+## Web Studio
+
+Start the web studio anytime:
+```bash
+syndocs serve
+```
+
+### Key Features:
+- **Built-in Internal Guides**: Access complete SynDocs reference guides directly in the studio even in fresh or uninitialized projects.
+- **Dual-Tab Tree Sidebar**: Switch seamlessly between the **Docs Tree** (`.syndocs/docs/` and `.syndocs/guides/`) and the full **Codebase Tree**.
+- **Interactive AST Anchors**: Code tokens are wrapped in interactive badges linking to dependencies with hover cards.
+- **Dynamic SVG Connection Threads**: Real-time Bézier curves connect code symbols to graph nodes (modes: *Always*, *Hover*, or *Off*).
+- **Safe Note Editing**: Authenticate with your access code to edit notes in markdown. Code snapshots, hashes, and AST metadata remain strictly immutable.
+- **Live Reload via SSE**: Edits to documentation or source files automatically reload the web studio.
+
+---
+
+## CodeGraph Integration
+
+SynDocs integrates with [CodeGraph](https://github.com/colbymchenry/codegraph) for deep AST intelligence:
 
 ```bash
-syndocs explain-connections src/auth/Login.php
+npm install -g @colbymchenry/codegraph
 ```
 
-*(Phase 6 — calls Claude to draft Why cells as a starting point for review.)*
+When CodeGraph is present:
+- **AST-Exact Micro-Doc Scopes**: Uses Tree-sitter AST nodes to find the exact beginning and end of classes, functions, and blocks.
+- **Downstream Blast Radius**: When code drifts, `syndocs check` and `syndocs tree` report which other files depend on that code (`⚡ N deps`).
+- **Graph Threads & Wiki-Links**: Auto-wires dependency edges and in-code SVG connections.
+
+*Without CodeGraph, SynDocs degrades gracefully using built-in structural regex boundary detection.*
 
 ---
 
-## CI integration
+## Project Layout
+
+```
+.syndocs/
+  docs/                    ← mirror docs with embedded micro-doc sections
+    packages/core/src/hash.ts.md
+  guides/                  ← composed guides & tutorials
+    architecture.md
+  auth.json                ← salted PBKDF2 hash for Web UI editing (gitignored)
+.codegraph/                ← CodeGraph SQLite database (optional)
+syndocs.config.json        ← project configuration
+```
+
+### Configuration (`syndocs.config.json`)
+
+```json
+{
+  "docsRoot": ".syndocs/docs",
+  "guidesRoot": ".syndocs/guides",
+  "ignore": ["node_modules", ".git", "dist", "build", ".next", "coverage", ".syndocs"]
+}
+```
+
+---
+
+## CI Integration
+
+Add SynDocs drift checking to GitHub Actions:
 
 ```yaml
 # .github/workflows/syndocs.yml
-name: SynDocs — Docs Drift Check
+name: SynDocs Drift Check
 on: [push, pull_request]
 
 jobs:
@@ -230,80 +326,8 @@ jobs:
         with: { node-version: '22' }
       - run: npm ci
       - run: npm run build --workspaces --if-present
-      - run: node packages/cli/dist/index.js check --no-annotate --fail --no-blast-radius
+      - run: node packages/cli/dist/index.js check --fail --no-blast-radius
       - run: node packages/cli/dist/index.js lint-embeds
 ```
 
-A PR that changes a documented file without updating its mirror doc will fail
-the `check` step. The reviewer sees which file drifted; the author runs
-`syndocs update` to resolve it.
-
----
-
-## Graph features — CodeGraph integration
-
-Graph features (wiki-links, blast-radius, AST-exact boundaries) require
-[CodeGraph](https://github.com/colbymchenry/codegraph):
-
-```bash
-npm install -g @colbymchenry/codegraph
-```
-
-After installing, `syndocs init` handles `codegraph init` automatically.
-CodeGraph writes to `.codegraph/` (its own directory). SynDocs writes to
-`.syndocs/`. They share nothing — CodeGraph is read-only from SynDocs' side.
-
-**Without CodeGraph:** all core features (drift detection, mirror docs, guides,
-web UI) work normally. Graph-specific features degrade gracefully to no-ops.
-
----
-
-## Requirements
-
-| Feature | Node version |
-|---------|-------------|
-| Core (drift detection, mirror docs) | Node ≥ 18 |
-| Graph features (wiki-links, blast-radius) | Node ≥ 22.5 |
-| Web UI (`syndocs serve`) | Node ≥ 18 |
-
----
-
-## Project layout
-
-```
-.syndocs/                  ← hidden SynDocs directory
-  docs/                    ← whole-file mirror docs
-    src/auth/Login.php.md
-  microdocs/               ← micro-docs for specific blocks
-    src/auth/Login.php/validate.md
-  guides/                  ← hand-written composed docs
-    auth.md
-.codegraph/                ← CodeGraph's SQLite index (CodeGraph)
-syndocs.config.json        ← optional config
-```
-
-### Config (`syndocs.config.json`)
-
-```json
-{
-  "docsRoot": ".syndocs/docs",
-  "microdocsRoot": ".syndocs/microdocs",
-  "guidesRoot": ".syndocs/guides",
-  "ignore": ["node_modules", "dist", ".next", ".syndocs"]
-}
-```
-
----
-
-## Roadmap
-
-| Phase | Feature | Status |
-|-------|---------|--------|
-| 0–1 | Drift detection, mirror docs, hash | ✅ Done |
-| 2 | CI enforcement, pre-commit hook | ✅ Done |
-| 3 | Composed docs, @syndocs-embed | ✅ Done |
-| 4 | CodeGraph adapter, graph-link, blast-radius | ✅ Done |
-| 5 | Web UI with force graph | ✅ Done |
-| 6 | AI-generated Why column drafts | Backlog |
-| 6 | VS Code extension | Backlog |
-| 6 | Notion publish (one-way) | Backlog |
+A pull request that alters code without updating the corresponding mirror doc section will fail CI. Authors can simply run `syndocs update` to resolve drift before merging.

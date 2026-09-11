@@ -1,5 +1,5 @@
 # init.ts
-<!-- syndocs-hash: d8c5856f6cf7 -->
+<!-- syndocs-hash: 99708baba54d -->
 
 ```ts
 // @syndocs
@@ -60,8 +60,26 @@ export async function runInit(opts: InitOptions): Promise<void> {
 
   // Ensure directory structure exists
   if (!dryRun) {
-    ensureDir(path.join(cwd, config.docsRoot));
-    ensureDir(path.join(cwd, config.guidesRoot));
+    const guidesDir = path.join(cwd, config.guidesRoot);
+    ensureDir(guidesDir);
+    const sampleGuide = path.join(guidesDir, 'architecture.md');
+    if (!fs.existsSync(sampleGuide) && fs.readdirSync(guidesDir).length === 0) {
+      const guideContent = `# Architecture & Composed Guide
+
+This is a composed documentation guide. Unlike mirror docs, guides are narrative documents that explain high-level system architecture and workflows.
+
+You can embed code directly from your mirror docs and micro-docs using the \`@synd-embed:\` directive:
+
+<!-- Example:
+@synd-embed: src/index.ts
+@synd-embed: src/index.ts#my-label
+-->
+
+Run \`syndocs lint-embeds\` to validate all embed references!
+`;
+      fs.writeFileSync(sampleGuide, guideContent, 'utf8');
+      console.log('  ' + c.green('+ created') + '   ' + path.relative(cwd, sampleGuide));
+    }
 
     const cfgPath = path.join(cwd, 'syndocs.config.json');
     if (!fs.existsSync(cfgPath)) {
