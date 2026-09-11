@@ -3,8 +3,12 @@
 **Code-synced documentation with a connected graph.** Drop one comment into a source file. SynDocs keeps a matching mirror doc alongside it, detects drift when the code changes, and — with CodeGraph — wires every doc to the files it depends on so you can browse the whole codebase as a connected graph in Obsidian or the built-in web UI.
 
 ---
+## Quick Install
+```bash
+curl -fsSL https://raw.githubusercontent.com/piedpipr/SynDocs/main/install.sh | bash
+```
 
-## Quick start
+## Quick start using npm/npx (not available at the moment)
 
 ```bash
 # Install (once published to npm)
