@@ -68,8 +68,8 @@ function findRealComment(
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
     if (inQuote) {
-      if (ch === '\\\\') {
-        i++; // skip escaped char
+      if (ch === '\\') {
+        i++; // skip escaped char (backslash escapes the next character)
         continue;
       }
       if (ch === inQuote) {

@@ -780,9 +780,12 @@ code, kbd, samp, pre {
 .code-link {
   cursor: pointer;
   border-radius: 3px;
-  transition: all 0.12s;
-  font-weight: 600;
+  padding: 0 2px;
+  transition: all 0.14s;
+  font-weight: 700;
   position: relative;
+  display: inline;
+  letter-spacing: -0.01em;
 }
 .code-link::after {
   content: '';
@@ -790,22 +793,26 @@ code, kbd, samp, pre {
   bottom: -1px;
   left: 0;
   right: 0;
-  height: 1px;
+  height: 1.5px;
   background: currentColor;
-  opacity: 0.5;
+  opacity: 0.65;
+  border-radius: 2px;
 }
-.code-link.kind-calls { color: #7dd3fc !important; text-shadow: 0 0 8px rgba(125,211,252,0.5); }
-.code-link.kind-imports { color: #fdba74 !important; text-shadow: 0 0 8px rgba(253,186,116,0.5); }
-.code-link.kind-extends { color: #d8b4fe !important; text-shadow: 0 0 8px rgba(216,180,254,0.5); }
-.code-link.kind-references { color: #6ee7b7 !important; text-shadow: 0 0 8px rgba(110,231,183,0.5); }
+/* Glow + color per kind — always visible, not just on hover */
+.code-link.kind-calls   { color: #7dd3fc !important; text-shadow: 0 0 10px rgba(125,211,252,0.65); background: rgba(125,211,252,0.08); }
+.code-link.kind-imports  { color: #fdba74 !important; text-shadow: 0 0 10px rgba(253,186,116,0.65); background: rgba(253,186,116,0.08); }
+.code-link.kind-extends  { color: #d8b4fe !important; text-shadow: 0 0 10px rgba(216,180,254,0.65); background: rgba(216,180,254,0.08); }
+.code-link.kind-references { color: #6ee7b7 !important; text-shadow: 0 0 10px rgba(110,231,183,0.65); background: rgba(110,231,183,0.08); }
 .code-link:hover {
-  background: rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.14);
   border-radius: 3px;
-  text-shadow: 0 0 14px currentColor;
+  text-shadow: 0 0 18px currentColor !important;
+  box-shadow: 0 0 0 1px currentColor;
 }
-[data-theme="light"] .code-link.kind-calls { color: #0369a1 !important; text-shadow: none; }
-[data-theme="light"] .code-link.kind-imports { color: #c2410c !important; text-shadow: none; }
-[data-theme="light"] .code-link.kind-extends { color: #7c3aed !important; text-shadow: none; }
+[data-theme="light"] .code-link.kind-calls    { color: #0369a1 !important; text-shadow: none; background: rgba(3,105,161,0.07); }
+[data-theme="light"] .code-link.kind-imports   { color: #c2410c !important; text-shadow: none; background: rgba(194,65,12,0.07); }
+[data-theme="light"] .code-link.kind-extends   { color: #7c3aed !important; text-shadow: none; background: rgba(124,58,237,0.07); }
+[data-theme="light"] .code-link.kind-references { color: #059669 !important; text-shadow: none; background: rgba(5,150,105,0.07); }
 
 /* ─── Microdoc Annotation Links in Code ────────────────────────────────────── */
 .microdoc-link {
@@ -1390,17 +1397,63 @@ code, kbd, samp, pre {
 .conn-item-meta { font-size: 10.5px; color: var(--text-dim); margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap; }
 
 #graph-footer {
-  padding: 8px 12px;
+  padding: 8px 12px 4px;
   font-size: 11px;
   color: var(--text-muted);
   border-top: 1px solid var(--border);
   background: var(--bg);
   min-height: 38px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 4px;
   flex-shrink: 0;
 }
+.graph-footer-row { display: flex; align-items: center; justify-content: space-between; }
+
+/* ─── Physics Sliders (hidden until footer hovered) ────────────────────────── */
+#graph-physics {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition: max-height 0.28s ease, opacity 0.22s ease;
+  pointer-events: none;
+}
+#graph-footer:hover #graph-physics {
+  max-height: 90px;
+  opacity: 1;
+  pointer-events: auto;
+}
+.physics-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.physics-row label { width: 68px; flex-shrink: 0; }
+.physics-slider {
+  flex: 1;
+  appearance: none;
+  height: 3px;
+  background: var(--bg-surface-2);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+.physics-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+.physics-val { width: 24px; text-align: right; font-family: var(--font-mono); font-size: 9.5px; }
 
 /* ─── Auth Modal ────────────────────────────────────────────────────────────── */
 #auth-modal {
@@ -1653,8 +1706,30 @@ code, kbd, samp, pre {
     <div id="connected-list-container"></div>
 
     <div id="graph-footer">
-      <span id="graph-info">Hover node to inspect · drag to rearrange</span>
-      <span id="graph-cg-badge" style="font-size:10px; opacity:0.65;"></span>
+      <div id="graph-physics">
+        <div class="physics-row">
+          <label>⊕ Gravity</label>
+          <input type="range" class="physics-slider" id="slider-gravity" min="0" max="1" step="0.01" value="0.08"
+            oninput="onPhysicsChange()">
+          <span class="physics-val" id="val-gravity">0.08</span>
+        </div>
+        <div class="physics-row">
+          <label>↔ Charge</label>
+          <input type="range" class="physics-slider" id="slider-charge" min="-600" max="-30" step="10" value="-200"
+            oninput="onPhysicsChange()">
+          <span class="physics-val" id="val-charge">-200</span>
+        </div>
+        <div class="physics-row">
+          <label>↦ Distance</label>
+          <input type="range" class="physics-slider" id="slider-dist" min="30" max="300" step="10" value="90"
+            oninput="onPhysicsChange()">
+          <span class="physics-val" id="val-dist">90</span>
+        </div>
+      </div>
+      <div class="graph-footer-row">
+        <span id="graph-info">Hover node to inspect · drag to rearrange · hover footer for physics</span>
+        <span id="graph-cg-badge" style="font-size:10px; opacity:0.65;"></span>
+      </div>
     </div>
   </aside>
 </div>
@@ -2921,28 +2996,33 @@ function buildGraph() {
     .map(e => ({ ...e }));
   const nodes = Array.from(nodeMap.values());
 
-  // Simulation with smoother parameters
-  simulation = d3.forceSimulation(nodes)
-    .alphaDecay(0.025)
-    .velocityDecay(0.38)
-    .force('link', d3.forceLink(links).id(d => d.id).distance(d => {
-      // Microdoc edges stay close; code edges spread out
-      return d.kind === 'contains' ? 50 : 120;
-    }).strength(d => d.kind === 'contains' ? 0.6 : 0.25))
-    .force('charge', d3.forceManyBody().strength(d => -250 - (edgeCount.get(d.id) || 0) * 20))
-    .force('center', d3.forceCenter(W / 2, H / 2).strength(0.08))
-    .force('collision', d3.forceCollide().radius(d => nodeRadius(d) + 10).strength(0.85))
-    .force('radial', d3.forceRadial(Math.min(W, H) * 0.3, W / 2, H / 2).strength(0.04));
+  // Read physics slider values (with safe defaults)
+  const gravityStr  = parseFloat((document.getElementById('slider-gravity')  || { value: '0.08' }).value);
+  const chargeStr   = parseFloat((document.getElementById('slider-charge')   || { value: '-200' }).value);
+  const distStr     = parseFloat((document.getElementById('slider-dist')     || { value: '90'  }).value);
 
-  // Obsidian-style straight graph lines
+  // Simulation with Obsidian-like tighter clustering
+  simulation = d3.forceSimulation(nodes)
+    .alphaDecay(0.022)
+    .velocityDecay(0.42)
+    .force('link', d3.forceLink(links).id(d => d.id).distance(d => {
+      return d.kind === 'contains' ? 40 : distStr;
+    }).strength(d => d.kind === 'contains' ? 0.7 : 0.3))
+    .force('charge', d3.forceManyBody().strength(d => chargeStr - (edgeCount.get(d.id) || 0) * 10))
+    .force('center', d3.forceCenter(W / 2, H / 2).strength(gravityStr))
+    .force('collision', d3.forceCollide().radius(d => nodeRadius(d) + 8).strength(0.9))
+    .force('x', d3.forceX(W / 2).strength(gravityStr * 0.5))
+    .force('y', d3.forceY(H / 2).strength(gravityStr * 0.5));
+
+  // Obsidian-style straight graph lines — brighter by default
   const linkLines = svgG.append('g')
     .attr('class', 'graph-links')
     .selectAll('line')
     .data(links)
     .join('line')
     .attr('stroke', d => edgeColor(d))
-    .attr('stroke-width', 1.2)
-    .attr('stroke-opacity', 0.35)
+    .attr('stroke-width', 1.4)
+    .attr('stroke-opacity', 0.55)
     .attr('stroke-linecap', 'round');
 
   // Node groups
@@ -2995,15 +3075,15 @@ function buildGraph() {
     .attr('stroke-width', 1.5)
     .attr('stroke-opacity', 0);
 
-  // Core circle
+  // Core circle — full opacity so nodes are clearly visible
   nodeGroup.append('circle')
     .attr('class', 'node-core')
     .attr('r', d => nodeRadius(d))
     .attr('fill', d => nodeColor(d))
-    .attr('fill-opacity', 0.85)
+    .attr('fill-opacity', 1.0)
     .attr('stroke', d => nodeColor(d))
-    .attr('stroke-width', 0.5)
-    .attr('stroke-opacity', 0.4);
+    .attr('stroke-width', 1.5)
+    .attr('stroke-opacity', 0.7);
 
   // Label (only show for nodes with enough space)
   nodeGroup.append('text')
@@ -3023,6 +3103,17 @@ function buildGraph() {
       .attr('y2', d => d.target.y);
     nodeGroup.attr('transform', d => 'translate(' + d.x + ',' + d.y + ')');
   });
+}
+
+function onPhysicsChange() {
+  const gravEl = document.getElementById('slider-gravity');
+  const chgEl  = document.getElementById('slider-charge');
+  const dstEl  = document.getElementById('slider-dist');
+  if (gravEl) document.getElementById('val-gravity').textContent = parseFloat(gravEl.value).toFixed(2);
+  if (chgEl)  document.getElementById('val-charge').textContent  = chgEl.value;
+  if (dstEl)  document.getElementById('val-dist').textContent   = dstEl.value;
+  // Rebuild graph with new physics
+  buildGraph();
 }
 
 function highlightGraphNode(id) {
