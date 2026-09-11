@@ -132,3 +132,32 @@ export function renderEmbedBlock(
 
   return lines.join('\n');
 }
+
+/**
+ * Render a standalone micro-doc to markdown.
+ */
+export function renderMicroDoc(
+  sourceFile: string,
+  label: string,
+  codeContent: string,
+  codeLanguage: string,
+  hash: string,
+  notes?: string,
+): string {
+  const lines: string[] = [
+    `# @syndocs: ${label}`,
+    `> Source: \`${sourceFile}\``,
+    `<!-- syndocs-hash: ${hash} -->`,
+    '',
+    '```' + codeLanguage,
+    codeContent.trimEnd(),
+    '```',
+    '',
+    '## Notes',
+    '',
+    notes && notes.trim() ? notes.trim() : '> _Add documentation notes here._',
+    '',
+  ];
+
+  return lines.join('\n');
+}

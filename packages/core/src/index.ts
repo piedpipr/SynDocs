@@ -24,7 +24,9 @@ export { extractMicroDocCode, parseAnchors } from './anchor-parser';
 
 // Mirror path computation
 export {
+  getMicroDocPath,
   getMirrorPath,
+  getSourceFromMicroDoc,
   getSourceFromMirror,
   isUnderDocsRoot,
 } from './mirror-path';
@@ -33,6 +35,7 @@ export {
 export { parseEmbeds, parseMirrorDoc } from './doc-parser';
 export {
   renderEmbedBlock,
+  renderMicroDoc,
   renderMirrorDoc,
   renderNewMirrorDoc,
 } from './doc-writer';
