@@ -1,0 +1,35 @@
+name: SynDocs — Docs Drift Check
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  syndocs-check:
+    name: Check docs are current
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build SynDocs
+        run: npm run build --workspaces --if-present
+
+      - name: Check for documentation drift
+        # --no-annotate: read-only in CI (don't write pending-diff blocks into files)
+        # --fail:        exit 1 if any documented file has drifted
+        # --no-blast-radius: skip CodeGraph lookup (index not present in CI)
+        run: node packages/cli/dist/index.js check --no-annotate --fail --no-blast-radius
+
+      # Optional: validate all @syndocs-embed references in guides/
+      - name: Lint composed doc embeds
+        run: node packages/cli/dist/index.js lint-embeds
