@@ -1,5 +1,5 @@
 # tree.ts
-<!-- syndocs-hash: cba62188702a -->
+<!-- syndocs-hash: 4a20f00213c0 -->
 
 ```ts
 // @syndocs
@@ -8,7 +8,6 @@ import path from 'path';
 import {
   computeHash,
   getLangConfig,
-  getMicroDocPath,
   getMirrorPath,
   parseAnchors,
   parseMirrorDoc,
@@ -92,22 +91,27 @@ export async function runTree(opts: TreeOptions): Promise<void> {
     let docHash: string | undefined;
     let diffLines: number | undefined;
 
+    const mirrorRel = getMirrorPath(relPath, config.docsRoot);
+    const mirrorAbs = path.join(cwd, mirrorRel);
+    
+    let mirrorDoc = fs.existsSync(mirrorAbs) ? parseMirrorDoc(readFileSafe(mirrorAbs)!) : null;
+
     const wholeFileAnchor = anchors.find(a => a.kind === 'whole-file');
-    if (showDocs && wholeFileAnchor) {
+    if (wholeFileAnchor) {
       hasWholeDoc = true;
       totalDocs++;
-      const mirrorRel = getMirrorPath(relPath, config.docsRoot);
-      const mirrorAbs = path.join(cwd, mirrorRel);
 
-      if (!fs.existsSync(mirrorAbs)) {
+      if (!mirrorDoc) {
         docStatus = 'missing';
         missingCount++;
       } else {
-        const doc = parseMirrorDoc(readFileSafe(mirrorAbs)!);
-        const section = doc.sections.find(s => s.kind === 'whole-file');
+        const section = mirrorDoc.sections.find(s => s.kind === 'whole-file');
         docHash = section?.hash;
 
-        if (docHash === currentHash) {
+        if (!section) {
+           docStatus = 'missing';
+           missingCount++;
+        } else if (docHash === currentHash) {
           docStatus = 'ok';
           okCount++;
         } else {
@@ -124,29 +128,32 @@ export async function runTree(opts: TreeOptions): Promise<void> {
       for (const anchor of microAnchors) {
         totalMicros++;
         const label = anchor.label!;
-        const microRel = getMicroDocPath(relPath, label, config.microdocsRoot);
-        const microAbs = path.join(cwd, microRel);
 
         // Approximate micro code length
         const nextAnchor = anchors.find(a => a.lineIndex > anchor.lineIndex);
         const microLines = (nextAnchor?.lineIndex ?? sourceLines) - anchor.lineIndex;
 
-        if (!fs.existsSync(microAbs)) {
+        if (!mirrorDoc) {
           microDocs.push({ label, status: 'missing', lineCount: microLines });
           missingCount++;
         } else {
-          const doc = parseMirrorDoc(readFileSafe(microAbs)!);
-          const section = doc.sections[0];
-          const storedHash = section?.hash;
-          const codeCopy = section?.codeCopy ?? '';
-          const codeHash = computeHash(codeCopy);
-
-          if (storedHash === codeHash && storedHash) {
-            microDocs.push({ label, status: 'ok', lineCount: codeCopy.split('\n').length, hash: storedHash });
-            okCount++;
+          const section = mirrorDoc.sections.find(s => s.kind === 'micro' && s.label === label);
+          
+          if (!section) {
+             microDocs.push({ label, status: 'missing', lineCount: microLines });
+             missingCount++;
           } else {
-            microDocs.push({ label, status: 'stale', lineCount: microLines, hash: storedHash, diffLines: 1 });
-            staleCount++;
+             const storedHash = section?.hash;
+             const codeCopy = section?.codeCopy ?? '';
+             const codeHash = computeHash(codeCopy);
+
+             if (storedHash === codeHash && storedHash) {
+               microDocs.push({ label, status: 'ok', lineCount: codeCopy.split('\n').length, hash: storedHash });
+               okCount++;
+             } else {
+               microDocs.push({ label, status: 'stale', lineCount: microLines, hash: storedHash, diffLines: 1 });
+               staleCount++;
+             }
           }
         }
       }
@@ -160,53 +167,47 @@ export async function runTree(opts: TreeOptions): Promise<void> {
     if (adapter) {
       downstreamCount = adapter.getImpactRadius(absPath).length;
     }
-
-    fileNodes.push({
-      relPath,
-      hasWholeDoc,
-      docStatus,
-      docLineCount: sourceLines,
-      docHash,
-      diffLines,
-      microDocs,
-      downstreamCount,
-    });
+    
+    // Only add to tree if we're showing something from it
+    if ((showDocs && hasWholeDoc) || (showMicros && microDocs.length > 0)) {
+       fileNodes.push({
+         relPath,
+         hasWholeDoc,
+         docStatus,
+         docLineCount: sourceLines,
+         docHash,
+         diffLines,
+         microDocs,
+         downstreamCount,
+       });
+    }
   }
 
   // ── Render Tree ───────────────────────────────────────────────────────────
   console.log(c.cyan(c.bold('.syndocs/')));
 
   // Render docs branch
-  if (showDocs) {
-    console.log(c.dim('├── ') + c.bold('docs/'));
-    const docFiles = fileNodes.filter(f => f.hasWholeDoc);
+  console.log(c.dim('├── ') + c.bold('docs/'));
 
-    docFiles.forEach((file, index) => {
-      const isLastFile = index === docFiles.length - 1 && (!showMicros || fileNodes.length === 0);
-      const prefix = isLastFile ? '│   └── ' : '│   ├── ';
-      const statusBadge = formatStatusBadge(file.docStatus ?? 'missing');
-      const hashBadge = file.docHash ? c.dim(`(${file.docHash.slice(0, 7)})`) : '';
-      const linesBadge = file.docLineCount ? c.dim(`${file.docLineCount}L`) : '';
-      const impactBadge = file.downstreamCount ? c.yellow(`⚡ ${file.downstreamCount} deps`) : '';
+  fileNodes.forEach((file, index) => {
+    const isLastFile = index === fileNodes.length - 1;
+    const filePrefix = isLastFile ? '│   └── ' : '│   ├── ';
+    
+    // Build badge string for whole-file doc if we're showing it and it has one
+    let docInfo = '';
+    if (showDocs && file.hasWholeDoc) {
+       const statusBadge = formatStatusBadge(file.docStatus ?? 'missing');
+       const hashBadge = file.docHash ? c.dim(`(${file.docHash.slice(0, 7)})`) : '';
+       const linesBadge = file.docLineCount ? c.dim(`${file.docLineCount}L`) : '';
+       const impactBadge = file.downstreamCount ? c.yellow(`⚡ ${file.downstreamCount} deps`) : '';
+       docInfo = ` ${statusBadge} ${linesBadge} ${hashBadge} ${impactBadge}`.trim();
+    }
+    
+    console.log(`${c.dim(filePrefix)}${c.bold(file.relPath)} ${docInfo}`.trimEnd());
 
-      console.log(
-        `${c.dim(prefix)}${file.relPath} ${statusBadge} ${linesBadge} ${hashBadge} ${impactBadge}`.trim(),
-      );
-    });
-  }
-
-  // Render microdocs branch
-  if (showMicros) {
-    const microFiles = fileNodes.filter(f => f.microDocs.length > 0);
-    console.log(c.dim('├── ') + c.bold('microdocs/'));
-
-    microFiles.forEach((file, fIndex) => {
-      const isLastFile = fIndex === microFiles.length - 1;
-      const filePrefix = isLastFile ? '│   └── ' : '│   ├── ';
+    // Print micro docs under the file if any
+    if (showMicros && file.microDocs.length > 0) {
       const subPrefix = isLastFile ? '│       ' : '│   │   ';
-
-      console.log(`${c.dim(filePrefix)}${c.bold(file.relPath)} ${c.dim(`(${file.microDocs.length} micro-docs)`)}`);
-
       file.microDocs.forEach((micro, mIndex) => {
         const isLastMicro = mIndex === file.microDocs.length - 1;
         const leafPrefix = isLastMicro ? '└── ' : '├── ';
@@ -216,8 +217,9 @@ export async function runTree(opts: TreeOptions): Promise<void> {
 
         console.log(`${c.dim(subPrefix + leafPrefix)}#${c.cyan(micro.label)} ${badge} ${lines} ${hash}`.trim());
       });
-    });
-  }
+    }
+  });
+
 
   // Render guides branch
   console.log(c.dim('└── ') + c.bold('guides/'));

@@ -1,5 +1,5 @@
 # utils.ts
-<!-- syndocs-hash: bab744444a14 -->
+<!-- syndocs-hash: 449d79db1afb -->
 
 ```ts
 // @syndocs
@@ -28,14 +28,12 @@ export const c = {
 
 export interface SynDocsConfig {
   docsRoot: string;
-  microdocsRoot: string;
   guidesRoot: string;
   ignore: string[];
 }
 
 const DEFAULT_CONFIG: SynDocsConfig = {
   docsRoot: '.syndocs/docs',
-  microdocsRoot: '.syndocs/microdocs',
   guidesRoot: '.syndocs/guides',
   ignore: ['node_modules', '.git', 'dist', 'build', '.next', 'coverage', '.syndocs', 'syndocs', '.codegraph', 'graphify-out'],
 };
@@ -84,7 +82,6 @@ export function* walkSourceFiles(
       if (config.ignore.some(p => entry.name === p || rel.startsWith(p + '/'))) continue;
       if (isUnderDocsRoot(rel, config.docsRoot)) continue;
       if (rel.startsWith(config.guidesRoot + '/') || rel === config.guidesRoot) continue;
-      if (rel.startsWith(config.microdocsRoot + '/') || rel === config.microdocsRoot) continue;
       if (rel.startsWith('.syndocs/') || rel === '.syndocs') continue;
       yield* walkSourceFiles(full, config, baseDir);
     } else if (entry.isFile()) {
@@ -113,12 +110,6 @@ function* walkMdFiles(dir: string, base: string): Iterable<string> {
 
 export function* walkMirrorDocs(docsRoot: string, cwd: string): Iterable<string> {
   const full = path.join(cwd, docsRoot);
-  if (!fs.existsSync(full)) return;
-  yield* walkMdFiles(full, cwd);
-}
-
-export function* walkMicroDocs(microdocsRoot: string, cwd: string): Iterable<string> {
-  const full = path.join(cwd, microdocsRoot);
   if (!fs.existsSync(full)) return;
   yield* walkMdFiles(full, cwd);
 }

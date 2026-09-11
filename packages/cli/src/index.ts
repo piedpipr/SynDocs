@@ -73,15 +73,16 @@ ${c.bold('Usage:')}
 ${c.bold('Collections & Filtering:')}
   [targets...]     Filter by file or directory path (e.g. src/ or packages/core/src/types.ts)
   --docs           Only whole-file mirror docs (.syndocs/docs/)
-  --microdocs      Only micro-docs (.syndocs/microdocs/)
-  --all            Both docs and micro-docs (default)
+  --microdocs      Only micro-doc sections
+  --all            Both whole-file and micro-docs (default)
 
 ${c.bold('Markers:')}
-  // @syndocs                whole-file doc  (JS/TS/PHP/Go/...)
-  # @syndocs                 whole-file doc  (Python/Ruby/YAML/...)
-  // @syndocs: label          micro-doc for a specific block
-  @syndocs-embed: path        embed in a composed guide
-  @syndocs-embed: path#label  embed one specific micro-doc
+  // @syndocs / // @synd      whole-file or auto-scoped micro-doc (JS/TS/PHP/Go/...)
+  # @syndocs / # @synd        whole-file or auto-scoped micro-doc (Python/Ruby/YAML/...)
+  // @syndocs: label          named micro-doc block (also // @synd: label)
+  code ... // @synd           trailing inline annotation (auto-scopes line/element)
+  @syndocs-embed: path        embed in a composed guide (also @synd-embed:)
+  @syndocs-embed: path#label  embed specific micro-doc (also @synd-embed:)
 
 ${c.bold('Options:')}
   --cwd <path>     Run as if in this directory

@@ -16,17 +16,18 @@ export type {
 // Hashing
 export { computeHash, normalise } from './hash';
 
-// Language detection
-export { getCodeBlockLang, getLangConfig } from './languages';
+// Language detection and Regex
+export { getCodeBlockLang, getLangConfig, buildEmbedRegex, buildInlineAnchorRegex } from './languages';
 
 // Anchor parsing
 export { extractMicroDocCode, parseAnchors } from './anchor-parser';
 
+// Slugs
+export { toKebabSlug, generateUniqueSlug } from './slug';
+
 // Mirror path computation
 export {
-  getMicroDocPath,
   getMirrorPath,
-  getSourceFromMicroDoc,
   getSourceFromMirror,
   isUnderDocsRoot,
 } from './mirror-path';
@@ -35,7 +36,6 @@ export {
 export { parseEmbeds, parseMirrorDoc } from './doc-parser';
 export {
   renderEmbedBlock,
-  renderMicroDoc,
   renderMirrorDoc,
   renderNewMirrorDoc,
 } from './doc-writer';

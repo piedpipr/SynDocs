@@ -5,13 +5,13 @@ import {
   computeHash,
   getCodeBlockLang,
   getLangConfig,
-  getMicroDocPath,
   getMirrorPath,
   hashPassword,
   parseAnchors,
   ParsedAnchor,
-  renderMicroDoc,
   renderNewMirrorDoc,
+  extractMicroDocCode,
+  DocSection,
 } from '@syndocs/core';
 import {
   SynDocsConfig,
@@ -57,7 +57,6 @@ export async function runInit(opts: InitOptions): Promise<void> {
   // Ensure directory structure exists
   if (!dryRun) {
     ensureDir(path.join(cwd, config.docsRoot));
-    ensureDir(path.join(cwd, config.microdocsRoot));
     ensureDir(path.join(cwd, config.guidesRoot));
 
     const cfgPath = path.join(cwd, 'syndocs.config.json');
@@ -89,7 +88,7 @@ export async function runInit(opts: InitOptions): Promise<void> {
 
   // ── 1. Create docs & micro-docs ─────────────────────────────────────────────
 
-  let docsCreated = 0, microsCreated = 0, skipped = 0, found = 0;
+  let docsCreated = 0, skipped = 0, found = 0;
 
   for (const relPath of walkSourceFiles(cwd, config)) {
     const absPath = path.join(cwd, relPath);
@@ -104,43 +103,53 @@ export async function runInit(opts: InitOptions): Promise<void> {
 
     found++;
 
-    const hash = computeHash(content);
+    const currentHash = computeHash(content);
     const lang = getCodeBlockLang(relPath);
 
-    // Whole-file doc
-    const wholeFileAnchor = anchors.find(a => a.kind === 'whole-file');
-    if (wholeFileAnchor) {
-      const mirrorRel = getMirrorPath(relPath, config.docsRoot);
-      const mirrorAbs = path.join(cwd, mirrorRel);
+    const mirrorRel = getMirrorPath(relPath, config.docsRoot);
+    const mirrorAbs = path.join(cwd, mirrorRel);
 
-      if (fs.existsSync(mirrorAbs)) {
-        skipped++;
-      } else {
-        const docContent = renderNewMirrorDoc(relPath, content, lang, hash);
-        if (!dryRun) writeFile(mirrorAbs, docContent);
-        console.log('  ' + c.green('+ created') + '   ' + relPath + '  \u2192  ' + c.cyan(mirrorRel));
-        docsCreated++;
-      }
+    if (fs.existsSync(mirrorAbs)) {
+      skipped++;
+      continue;
     }
 
-    // Micro-docs
+    // Build micro-doc sections
+    const microSections: DocSection[] = [];
     const microAnchors = anchors.filter(a => a.kind === 'micro' && a.label);
+    
     for (const anchor of microAnchors) {
-      const label = anchor.label!;
-      const microRel = getMicroDocPath(relPath, label, config.microdocsRoot);
-      const microAbs = path.join(cwd, microRel);
-
-      if (fs.existsSync(microAbs)) {
-        skipped++;
-      } else {
-        const microCode = extractCodeSnippet(content, anchor, anchors, absPath, adapter);
-        const microHash = computeHash(microCode);
-        const microDocContent = renderMicroDoc(relPath, label, microCode, lang, microHash);
-        if (!dryRun) writeFile(microAbs, microDocContent);
-        console.log('  ' + c.green('+ created') + '   ' + relPath + ' ' + c.cyan('#' + label) + '  \u2192  ' + c.dim(microRel));
-        microsCreated++;
+      // Scope resolution with GraphAdapter if CodeGraph active
+      if (adapter && anchor.autoScoped && anchor.scopeStartLine === undefined) {
+         const boundary = adapter.getNextNode(absPath, anchor.lineIndex + 1);
+         if (boundary) {
+           anchor.scopeStartLine = boundary.startLine - 1;
+           anchor.scopeEndLine = boundary.endLine;
+         }
       }
+
+      const nextAnchor = anchors.find(a => a.lineIndex > anchor.lineIndex);
+      const microCode = extractMicroDocCode(content, anchor, nextAnchor?.lineIndex);
+      const microHash = computeHash(microCode);
+
+      microSections.push({
+        kind: 'micro',
+        label: anchor.label!,
+        hash: microHash,
+        codeCopy: microCode,
+        codeLanguage: lang,
+        notes: '',
+        elementKind: anchor.elementKind,
+        elementName: anchor.elementName,
+        scopeStartLine: anchor.scopeStartLine,
+        scopeEndLine: anchor.scopeEndLine,
+      });
     }
+
+    const docContent = renderNewMirrorDoc(relPath, content, lang, currentHash, microSections);
+    if (!dryRun) writeFile(mirrorAbs, docContent);
+    console.log('  ' + c.green('+ created') + '   ' + relPath + '  \u2192  ' + c.cyan(mirrorRel));
+    docsCreated++;
   }
 
   adapter?.close();
@@ -148,17 +157,17 @@ export async function runInit(opts: InitOptions): Promise<void> {
   console.log('');
   console.log(
     '  ' + c.bold('Summary:') + '  '
-    + c.green(String(docsCreated)) + ' mirror docs, '
-    + c.green(String(microsCreated)) + ' micro-docs created, '
+    + c.green(String(docsCreated)) + ' mirror docs created, '
     + c.dim(String(skipped)) + ' already existed',
   );
 
   if (found === 0) {
     console.log('');
-    console.log(c.yellow('  No @syndocs markers found.') + ' Add one to a source file:\n');
-    console.log('    // @syndocs              \u2190 whole-file (JS/TS/PHP/Go/\u2026)');
-    console.log('    # @syndocs               \u2190 whole-file (Python/Ruby/YAML/\u2026)');
-    console.log('    // @syndocs: my-label    \u2190 micro-doc for a specific block');
+    console.log(c.yellow('  No @synd or @syndocs markers found.') + ' Add one to a source file:\n');
+    console.log('    // @synd              \u2190 whole-file (JS/TS/PHP/Go/\u2026)');
+    console.log('    # @synd               \u2190 whole-file (Python/Ruby/YAML/\u2026)');
+    console.log('    // @synd: my-label    \u2190 micro-doc for a specific block');
+    console.log('    const X = 1; // @synd \u2190 micro-doc for single line scoped block');
   }
 
   // ── 2. CodeGraph index ──────────────────────────────────────────────────────
@@ -181,31 +190,4 @@ export async function runInit(opts: InitOptions): Promise<void> {
     console.log('       ' + c.cyan('npm i -g @colbymchenry/codegraph') + '  then re-run ' + c.cyan('syndocs init'));
     console.log('  Core drift-detection works without it; graph-link and blast-radius need it.');
   }
-}
-
-function extractCodeSnippet(
-  content: string,
-  anchor: ParsedAnchor,
-  allAnchors: ParsedAnchor[],
-  absPath: string,
-  adapter: GraphAdapter,
-): string {
-  const lines = content.split('\n');
-  let startLine = anchor.lineIndex + 1;
-  let endLine: number | undefined;
-
-  if (adapter) {
-    const boundary = adapter.getNodeBoundary(absPath, startLine);
-    if (boundary) {
-      startLine = boundary.startLine - 1;
-      endLine = boundary.endLine;
-    }
-  }
-
-  if (endLine === undefined) {
-    const nextAnchor = allAnchors.find(a => a.lineIndex > anchor.lineIndex);
-    endLine = nextAnchor?.lineIndex ?? lines.length;
-  }
-
-  return lines.slice(startLine, endLine).join('\n').trim();
 }

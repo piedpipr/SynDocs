@@ -1,5 +1,5 @@
 # lint-embeds.ts
-<!-- syndocs-hash: 0884ac8ee1cb -->
+<!-- syndocs-hash: b7d081a22eac -->
 
 ```ts
 // @syndocs
@@ -53,7 +53,7 @@ export async function runLintEmbeds(opts: LintEmbedsOptions): Promise<number> {
               composedFile: guideRel,
               embed,
               status: 'broken-label',
-              message: 'label "@syndocs: ' + embed.targetLabel + '" not found in ' + embed.targetPath,
+              message: 'label "@synd: ' + embed.targetLabel + '" not found in ' + embed.targetPath,
             });
             continue;
           }
@@ -64,7 +64,7 @@ export async function runLintEmbeds(opts: LintEmbedsOptions): Promise<number> {
               composedFile: guideRel,
               embed,
               status: 'broken-label',
-              message: 'no @syndocs whole-file marker in ' + embed.targetPath,
+              message: 'no @synd whole-file marker in ' + embed.targetPath,
             });
             continue;
           }
@@ -85,7 +85,7 @@ export async function runLintEmbeds(opts: LintEmbedsOptions): Promise<number> {
     if (r.status === 'ok') {
       console.log('    ' + c.green('\u2713') + '  ' + target);
     } else {
-      console.log('    ' + c.red('\u2717') + '  line ' + (r.embed.lineIndex + 1) + ' @syndocs-embed: ' + target);
+      console.log('    ' + c.red('\u2717') + '  line ' + (r.embed.lineIndex + 1) + ' @synd-embed: ' + target);
       console.log('       ' + c.red(r.message ?? r.status));
     }
   }
@@ -93,7 +93,7 @@ export async function runLintEmbeds(opts: LintEmbedsOptions): Promise<number> {
   const broken = results.filter(r => r.status !== 'ok');
   console.log('');
   if (results.length === 0) {
-    console.log('  ' + c.dim('No composed docs with @syndocs-embed directives found.'));
+    console.log('  ' + c.dim('No composed docs with @synd-embed directives found.'));
     return 0;
   }
   console.log(

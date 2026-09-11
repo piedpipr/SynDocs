@@ -1,5 +1,5 @@
 # doc-parser.ts
-<!-- syndocs-hash: c0c6798d3474 -->
+<!-- syndocs-hash: 8c1809acf341 -->
 
 ```ts
 // @syndocs
@@ -9,10 +9,10 @@ import type { DocSection, MirrorDocData, ParsedEmbed } from './types';
 
 const HASH_RE   = /<!--\s*syndocs-hash:\s*([a-f0-9]+)\s*-->/;
 const SYNCED_RE = /<!--\s*syndocs-synced:\s*([a-f0-9]+)\s*-->/;
-// @syndocs-embed: path  or  @syndocs-embed: path#label
-const EMBED_RE  = /@syndocs-embed:\s*([^\s#]+)(?:#(\S+))?/;
+// @syndocs-embed: path  or  @synd-embed: path#label
+const EMBED_RE  = /@(?:syndocs|synd)-embed:\s*([^\s#]+)(?:#(\S+))?/;
 // Section separator for micro-docs inside a mirror doc
-const MICRO_HEADER_RE = /^##\s+@syndocs:\s+(\S+)/;
+const MICRO_HEADER_RE = /^##\s+@(?:syndocs|synd):\s+(\S+)/;
 const PENDING_START   = '<!-- syndocs-pending-start -->';
 const PENDING_END     = '<!-- syndocs-pending-end -->';
 
@@ -104,7 +104,7 @@ export function parseEmbeds(content: string): ParsedEmbed[] {
 /**
  * Split the lines of a mirror doc into an array of "blocks", where each block
  * is a list of lines belonging to one section (whole-file or micro-doc).
- * Sections are delimited by a "---" line followed by "## @syndocs: label".
+ * Sections are delimited by "## @syndocs: label" or "## @synd: label" headers.
  */
 function splitIntoSections(lines: string[]): string[][] {
   const sections: string[][] = [];
@@ -113,16 +113,14 @@ function splitIntoSections(lines: string[]): string[][] {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
-    // A "---" separator followed by "## @syndocs:" starts a new section
-    if (line.trim() === '---') {
-      const next = lines[i + 1] ?? '';
-      if (MICRO_HEADER_RE.test(next)) {
-        sections.push(current);
-        current = [];
-        i++; // consume the --- line; next iteration will be the ## @syndocs: header
-        current.push(lines[i]);
-        continue;
+    if (MICRO_HEADER_RE.test(line.trim())) {
+      // Strip trailing "---" or blank lines from the previous section
+      while (current.length > 0 && (current[current.length - 1].trim() === '' || current[current.length - 1].trim() === '---')) {
+        current.pop();
       }
+      sections.push(current);
+      current = [line];
+      continue;
     }
 
     current.push(line);
@@ -130,6 +128,28 @@ function splitIntoSections(lines: string[]): string[][] {
 
   sections.push(current);
   return sections;
+}
+
+const BREADCRUMB_RE = />\s*🔍\s*([^\s·]+)\s*·\s*`([^`]+)`(?:\s*·\s*lines\s*(\d+)–(\d+))?/;
+
+function extractBreadcrumb(lines: string[]): {
+  elementKind?: string;
+  elementName?: string;
+  scopeStartLine?: number;
+  scopeEndLine?: number;
+} {
+  for (const line of lines) {
+    const m = line.match(BREADCRUMB_RE);
+    if (m) {
+      return {
+        elementKind: m[1],
+        elementName: m[2],
+        scopeStartLine: m[3] ? parseInt(m[3], 10) - 1 : undefined,
+        scopeEndLine: m[4] ? parseInt(m[4], 10) : undefined,
+      };
+    }
+  }
+  return {};
 }
 
 /**
@@ -145,8 +165,18 @@ function parseSectionBlock(
   const codeLanguage = extractFirstCodeBlock(lines).lang;
   const pendingDiff = extractPendingDiff(lines);
   const notes       = extractNotes(lines);
+  const breadcrumb  = extractBreadcrumb(lines);
 
-  return { kind, label, hash, codeCopy, codeLanguage, notes, pendingDiff };
+  return {
+    kind,
+    label,
+    hash,
+    codeCopy,
+    codeLanguage,
+    notes,
+    pendingDiff,
+    ...breadcrumb,
+  };
 }
 
 function extractHash(lines: string[]): string | undefined {
@@ -255,5 +285,19 @@ function extractNotes(lines: string[]): string {
 ```
 
 ## Notes
+
+> _Add documentation notes here._
+
+---
+
+## @synd: embed-re
+> 🔍 variable · `EMBED_RE` · lines 9–9
+<!-- syndocs-hash: cf4779ef78c9 -->
+
+```ts
+const EMBED_RE  = /@(?:syndocs|synd)-embed:\s*([^\s#]+)(?:#(\S+))?/;
+```
+
+### Notes
 
 > _Add documentation notes here._

@@ -6,7 +6,26 @@ const PENDING_END   = '<!-- syndocs-pending-end -->';
 
 /**
  * Render a MirrorDocData struct back to the markdown string that will be
- * written to disk.  This is the single source of truth for the file format.
+ * written to disk. This is the single source of truth for the file format.
+ *
+ * Format (Notion-like embedded blocks):
+ *   # Filename.ext                         ← whole-file section
+ *   <!-- syndocs-hash: abc123 -->
+ *   ```lang
+ *   ...full file code...
+ *   ```
+ *   ## Notes
+ *   ...prose...
+ *
+ *   ---
+ *   ## @synd: parse-anchors                ← embedded micro-doc block
+ *   > 🔍 function · parseAnchors · lines 15–51
+ *   <!-- syndocs-hash: def456 -->
+ *   ```lang
+ *   ...scoped code...
+ *   ```
+ *   ### Notes
+ *   ...prose...
  */
 export function renderMirrorDoc(data: MirrorDocData): string {
   const parts: string[] = [];
@@ -26,7 +45,7 @@ export function renderMirrorDoc(data: MirrorDocData): string {
 }
 
 /**
- * Render one section (whole-file or micro-doc) to markdown.
+ * Render one section (whole-file or embedded micro-doc) to markdown.
  */
 function renderSection(
   title: string,
@@ -39,7 +58,15 @@ function renderSection(
   if (isFirst) {
     lines.push(`# ${title}`);
   } else {
-    lines.push(`## @syndocs: ${section.label}`);
+    lines.push(`## @synd: ${section.label}`);
+  }
+
+  // Element metadata breadcrumb for auto-scoped sections
+  if (!isFirst && section.elementKind && section.elementName) {
+    const lineRange = section.scopeStartLine !== undefined && section.scopeEndLine !== undefined
+      ? ` · lines ${section.scopeStartLine + 1}–${section.scopeEndLine}`
+      : '';
+    lines.push(`> 🔍 ${section.elementKind} · \`${section.elementName}\`${lineRange}`);
   }
 
   // Hash stamp
@@ -83,30 +110,30 @@ function renderSection(
 }
 
 /**
- * Produce the initial content for a brand-new mirror doc.
+ * Produce the initial content for a brand-new mirror doc with all sections.
+ * Creates the whole-file section plus any initial micro-doc sections.
  */
 export function renderNewMirrorDoc(
   sourceFile: string,
   codeContent: string,
   codeLanguage: string,
   hash: string,
+  microSections?: DocSection[],
 ): string {
   const title = sourceFile.split('/').pop() ?? sourceFile;
 
-  const data: MirrorDocData = {
-    title,
-    sections: [
-      {
-        kind: 'whole-file',
-        hash,
-        codeCopy: codeContent,
-        codeLanguage,
-        notes: '',
-      },
-    ],
-  };
+  const sections: DocSection[] = [
+    {
+      kind: 'whole-file',
+      hash,
+      codeCopy: codeContent,
+      codeLanguage,
+      notes: '',
+    },
+    ...(microSections ?? []),
+  ];
 
-  return renderMirrorDoc(data);
+  return renderMirrorDoc({ title, sections });
 }
 
 /**
@@ -127,35 +154,6 @@ export function renderEmbedBlock(
     '```' + codeLanguage,
     codeContent.trimEnd(),
     '```',
-    '',
-  ];
-
-  return lines.join('\n');
-}
-
-/**
- * Render a standalone micro-doc to markdown.
- */
-export function renderMicroDoc(
-  sourceFile: string,
-  label: string,
-  codeContent: string,
-  codeLanguage: string,
-  hash: string,
-  notes?: string,
-): string {
-  const lines: string[] = [
-    `# @syndocs: ${label}`,
-    `> Source: \`${sourceFile}\``,
-    `<!-- syndocs-hash: ${hash} -->`,
-    '',
-    '```' + codeLanguage,
-    codeContent.trimEnd(),
-    '```',
-    '',
-    '## Notes',
-    '',
-    notes && notes.trim() ? notes.trim() : '> _Add documentation notes here._',
     '',
   ];
 

@@ -1,5 +1,5 @@
 # update.ts
-<!-- syndocs-hash: 971c5e1aca60 -->
+<!-- syndocs-hash: b53abde99469 -->
 
 ```ts
 // @syndocs
@@ -9,16 +9,15 @@ import {
   computeHash,
   getCodeBlockLang,
   getLangConfig,
-  getMicroDocPath,
   getMirrorPath,
-  getSourceFromMicroDoc,
   getSourceFromMirror,
   parseAnchors,
   parseMirrorDoc,
   ParsedAnchor,
-  renderMicroDoc,
   renderMirrorDoc,
   renderNewMirrorDoc,
+  extractMicroDocCode,
+  DocSection,
 } from '@syndocs/core';
 import {
   SynDocsConfig,
@@ -27,7 +26,6 @@ import {
   readFileSafe,
   walkSourceFiles,
   walkMirrorDocs,
-  walkMicroDocs,
   writeFile,
   loadGraphAdapter,
   matchesTargets,
@@ -86,35 +84,43 @@ export async function runUpdate(opts: UpdateOptions): Promise<void> {
     const currentHash = computeHash(content);
     const lang = getCodeBlockLang(relPath);
 
+    const mirrorRel = getMirrorPath(relPath, config.docsRoot);
+    const mirrorAbs = path.join(cwd, mirrorRel);
+    
+    let existingDoc = fs.existsSync(mirrorAbs) ? parseMirrorDoc(readFileSafe(mirrorAbs)!) : null;
+    let didChange = false;
+    let newSections: DocSection[] = [];
+
     // Whole-file doc
     const wholeFileAnchor = anchors.find(a => a.kind === 'whole-file');
     if (updateDocs && wholeFileAnchor) {
-      const mirrorRel = getMirrorPath(relPath, config.docsRoot);
-      const mirrorAbs = path.join(cwd, mirrorRel);
-
-      if (!fs.existsSync(mirrorAbs)) {
-        // Auto-create brand-new mirror doc!
-        const docContent = renderNewMirrorDoc(relPath, content, lang, currentHash);
-        if (!dryRun) writeFile(mirrorAbs, docContent);
-        console.log('  ' + c.green('+ created') + '   ' + relPath + '  \u2192  ' + c.cyan(mirrorRel));
-        created++;
+      const existingSection = existingDoc?.sections.find(s => s.kind === 'whole-file');
+      
+      if (!existingSection) {
+        newSections.push({
+          kind: 'whole-file',
+          hash: currentHash,
+          codeCopy: content,
+          codeLanguage: lang,
+          notes: '',
+        });
+        didChange = true;
+        console.log('  ' + c.green('+ created doc') + '   ' + relPath + '  \u2192  ' + c.cyan(mirrorRel));
+        if (!existingDoc) created++;
       } else {
-        const doc = parseMirrorDoc(readFileSafe(mirrorAbs)!);
-        const section = doc.sections.find(s => s.kind === 'whole-file');
-
-        if (section?.hash === currentHash && !section.pendingDiff) {
-          alreadyOk++;
+        if (existingSection.hash === currentHash && !existingSection.pendingDiff) {
+           newSections.push(existingSection); // no change needed
         } else {
-          const updatedSections = doc.sections.map(s =>
-            s.kind === 'whole-file'
-              ? { ...s, hash: currentHash, codeCopy: content, codeLanguage: lang, pendingDiff: undefined }
-              : s,
-          );
-          if (!dryRun) writeFile(mirrorAbs, renderMirrorDoc({ ...doc, sections: updatedSections }));
-          console.log('  ' + c.green('\u2191 updated') + '   ' + relPath + '  \u2192  ' + c.cyan(mirrorRel));
-          updated++;
+           newSections.push({ ...existingSection, hash: currentHash, codeCopy: content, codeLanguage: lang, pendingDiff: undefined });
+           didChange = true;
+           console.log('  ' + c.green('\u2191 updated doc') + '   ' + relPath + '  \u2192  ' + c.cyan(mirrorRel));
+           if (!existingDoc) updated++;
         }
       }
+    } else if (existingDoc) {
+      // Keep existing whole-file section if we aren't updating docs
+      const existingSection = existingDoc.sections.find(s => s.kind === 'whole-file');
+      if (existingSection) newSections.push(existingSection);
     }
 
     // Micro-docs
@@ -122,37 +128,90 @@ export async function runUpdate(opts: UpdateOptions): Promise<void> {
       const microAnchors = anchors.filter(a => a.kind === 'micro' && a.label);
       for (const anchor of microAnchors) {
         const label = anchor.label!;
-        const microRel = getMicroDocPath(relPath, label, config.microdocsRoot);
-        const microAbs = path.join(cwd, microRel);
+        
+        // Scope resolution with GraphAdapter if CodeGraph active
+        if (adapter && anchor.autoScoped && anchor.scopeStartLine === undefined) {
+           const boundary = adapter.getNextNode(absPath, anchor.lineIndex + 1);
+           if (boundary) {
+             anchor.scopeStartLine = boundary.startLine - 1;
+             anchor.scopeEndLine = boundary.endLine;
+           }
+        }
 
-        const microCode = extractCodeSnippet(content, anchor, anchors, absPath, adapter);
+        const nextAnchor = anchors.find(a => a.lineIndex > anchor.lineIndex);
+        const microCode = extractMicroDocCode(content, anchor, nextAnchor?.lineIndex);
         const microHash = computeHash(microCode);
 
-        if (!fs.existsSync(microAbs)) {
-          // Auto-create brand-new micro-doc!
-          const microDocContent = renderMicroDoc(relPath, label, microCode, lang, microHash);
-          if (!dryRun) writeFile(microAbs, microDocContent);
-          console.log('  ' + c.green('+ created') + '   ' + relPath + ' ' + c.cyan('#' + label) + '  \u2192  ' + c.dim(microRel));
-          created++;
-        } else {
-          const doc = parseMirrorDoc(readFileSafe(microAbs)!);
-          const section = doc.sections[0];
+        const existingSection = existingDoc?.sections.find(s => s.kind === 'micro' && s.label === label);
 
-          if (section?.hash === microHash && !section.pendingDiff) {
-            alreadyOk++;
+        if (!existingSection) {
+          newSections.push({
+            kind: 'micro',
+            label,
+            hash: microHash,
+            codeCopy: microCode,
+            codeLanguage: lang,
+            notes: '',
+            elementKind: anchor.elementKind,
+            elementName: anchor.elementName,
+            scopeStartLine: anchor.scopeStartLine,
+            scopeEndLine: anchor.scopeEndLine,
+          });
+          didChange = true;
+          console.log('  ' + c.green('+ created block') + ' ' + relPath + ' ' + c.cyan('#' + label));
+        } else {
+          if (existingSection.hash === microHash && !existingSection.pendingDiff) {
+            newSections.push(existingSection); // no change needed
           } else {
-            const notes = section?.notes ?? '';
-            const updatedContent = renderMicroDoc(relPath, label, microCode, lang, microHash, notes);
-            if (!dryRun) writeFile(microAbs, updatedContent);
-            console.log('  ' + c.green('\u2191 updated') + '   ' + relPath + ' ' + c.cyan('#' + label));
-            updated++;
+            newSections.push({
+              ...existingSection,
+              hash: microHash,
+              codeCopy: microCode,
+              codeLanguage: lang,
+              pendingDiff: undefined,
+              elementKind: anchor.elementKind || existingSection.elementKind,
+              elementName: anchor.elementName || existingSection.elementName,
+              scopeStartLine: anchor.scopeStartLine ?? existingSection.scopeStartLine,
+              scopeEndLine: anchor.scopeEndLine ?? existingSection.scopeEndLine,
+            });
+            didChange = true;
+            console.log('  ' + c.green('\u2191 updated block') + ' ' + relPath + ' ' + c.cyan('#' + label));
           }
         }
       }
+    } else if (existingDoc) {
+      // keep existing micro sections if we aren't updating micros
+      newSections.push(...existingDoc.sections.filter(s => s.kind === 'micro'));
+    }
+
+    // Retain pruned/orphaned micro sections if not pruning
+    if (existingDoc && !prune) {
+       for (const existing of existingDoc.sections.filter(s => s.kind === 'micro')) {
+          if (!newSections.some(n => n.kind === 'micro' && n.label === existing.label)) {
+             newSections.push(existing);
+             orphanedKept++;
+          }
+       }
+    } else if (existingDoc && prune) {
+       for (const existing of existingDoc.sections.filter(s => s.kind === 'micro')) {
+          if (!newSections.some(n => n.kind === 'micro' && n.label === existing.label)) {
+             console.log('  ' + c.red('\u2717 pruned block') + '  ' + relPath + ' ' + c.dim('#' + existing.label));
+             didChange = true;
+             pruned++;
+          }
+       }
+    }
+
+    if (didChange) {
+      const docTitle = relPath.split('/').pop() ?? relPath;
+      if (!dryRun) writeFile(mirrorAbs, renderMirrorDoc({ title: docTitle, sections: newSections }));
+      if (existingDoc) updated++;
+    } else {
+      alreadyOk++;
     }
   }
 
-  // ── 2. Orphan check & prune handling ──────────────────────────────────────
+  // ── 2. Orphan check for whole files ───────────────────────────────────────
   if (updateDocs) {
     for (const mirrorRel of walkMirrorDocs(config.docsRoot, cwd)) {
       try {
@@ -174,8 +233,11 @@ export async function runUpdate(opts: UpdateOptions): Promise<void> {
           if (sourceContent && langConfig) {
             const anchors = parseAnchors(sourceContent, langConfig);
             if (!anchors.some(a => a.kind === 'whole-file')) {
-              isOrphan = true;
-              reason = '@syndocs annotation removed in source';
+              const mirrorDoc = parseMirrorDoc(readFileSafe(mirrorAbs)!);
+              if (mirrorDoc.sections.some(s => s.kind === 'whole-file')) {
+                 isOrphan = true;
+                 reason = '@syndocs annotation removed in source';
+              }
             }
           }
         }
@@ -183,51 +245,10 @@ export async function runUpdate(opts: UpdateOptions): Promise<void> {
         if (isOrphan) {
           if (prune) {
             if (!dryRun) fs.unlinkSync(mirrorAbs);
-            console.log('  ' + c.red('\u2717 pruned') + '    ' + mirrorRel + '  ' + c.dim('(' + reason + ')'));
+            console.log('  ' + c.red('\u2717 pruned doc') + '    ' + mirrorRel + '  ' + c.dim('(' + reason + ')'));
             pruned++;
           } else {
             console.log('  ' + c.yellow('! orphan') + '    ' + mirrorRel + '  ' + c.dim('(' + reason + ') — kept (use --prune to delete)'));
-            orphanedKept++;
-          }
-        }
-      } catch { /* skip malformed */ }
-    }
-  }
-
-  if (updateMicros) {
-    for (const microRel of walkMicroDocs(config.microdocsRoot, cwd)) {
-      try {
-        const { sourceRel, label } = getSourceFromMicroDoc(microRel, config.microdocsRoot);
-        if (targets.length > 0 && !matchesTargets(sourceRel, targets)) continue;
-
-        const sourceAbs = path.join(cwd, sourceRel);
-        const microAbs = path.join(cwd, microRel);
-
-        let isOrphan = false;
-        let reason = '';
-
-        if (!fs.existsSync(sourceAbs)) {
-          isOrphan = true;
-          reason = 'source deleted';
-        } else {
-          const sourceContent = readFileSafe(sourceAbs);
-          const langConfig = getLangConfig(sourceRel);
-          if (sourceContent && langConfig) {
-            const anchors = parseAnchors(sourceContent, langConfig);
-            if (!anchors.some(a => a.kind === 'micro' && a.label === label)) {
-              isOrphan = true;
-              reason = `label #${label} removed in source`;
-            }
-          }
-        }
-
-        if (isOrphan) {
-          if (prune) {
-            if (!dryRun) fs.unlinkSync(microAbs);
-            console.log('  ' + c.red('\u2717 pruned') + '    ' + microRel + '  ' + c.dim('(' + reason + ')'));
-            pruned++;
-          } else {
-            console.log('  ' + c.yellow('! orphan') + '    ' + microRel + '  ' + c.dim('(' + reason + ') — kept (use --prune to delete)'));
             orphanedKept++;
           }
         }
@@ -240,41 +261,14 @@ export async function runUpdate(opts: UpdateOptions): Promise<void> {
   console.log('');
   const msgs = [
     created ? c.green(String(created) + ' created') : '',
-    c.green(String(updated)) + ' updated',
-    c.dim(String(alreadyOk) + ' already current'),
+    updated ? c.green(String(updated) + ' updated') : '',
+    alreadyOk ? c.dim(String(alreadyOk) + ' already current') : '',
     pruned ? c.red(String(pruned) + ' pruned') : '',
     orphanedKept ? c.yellow(String(orphanedKept) + ' orphaned (kept)') : '',
     skipped ? c.dim(String(skipped) + ' skipped') : '',
   ].filter(Boolean);
 
-  console.log('  ' + c.bold('Result:') + '  ' + msgs.join(', '));
-}
-
-function extractCodeSnippet(
-  content: string,
-  anchor: ParsedAnchor,
-  allAnchors: ParsedAnchor[],
-  absPath: string,
-  adapter: GraphAdapter,
-): string {
-  const lines = content.split('\n');
-  let startLine = anchor.lineIndex + 1;
-  let endLine: number | undefined;
-
-  if (adapter) {
-    const boundary = adapter.getNodeBoundary(absPath, startLine);
-    if (boundary) {
-      startLine = boundary.startLine - 1;
-      endLine = boundary.endLine;
-    }
-  }
-
-  if (endLine === undefined) {
-    const nextAnchor = allAnchors.find(a => a.lineIndex > anchor.lineIndex);
-    endLine = nextAnchor?.lineIndex ?? lines.length;
-  }
-
-  return lines.slice(startLine, endLine).join('\n').trim();
+  console.log('  ' + c.bold('Result:') + '  ' + (msgs.join(', ') || 'no changes'));
 }
 ```
 

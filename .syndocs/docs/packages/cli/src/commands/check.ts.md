@@ -1,5 +1,5 @@
 # check.ts
-<!-- syndocs-hash: e62f6d4322c5 -->
+<!-- syndocs-hash: ea0d3b15012a -->
 
 ```ts
 // @syndocs
@@ -10,13 +10,12 @@ import {
   computeDiff,
   computeHash,
   getLangConfig,
-  getMicroDocPath,
   getMirrorPath,
-  getSourceFromMicroDoc,
   getSourceFromMirror,
   parseAnchors,
   parseMirrorDoc,
   ParsedAnchor,
+  extractMicroDocCode,
 } from '@syndocs/core';
 import {
   SynDocsConfig,
@@ -25,7 +24,6 @@ import {
   readFileSafe,
   walkSourceFiles,
   walkMirrorDocs,
-  walkMicroDocs,
   loadGraphAdapter,
   matchesTargets,
 } from '../utils';
@@ -69,17 +67,21 @@ export async function runCheck(opts: CheckOptions): Promise<number> {
     const anchors = parseAnchors(content, langConfig);
     if (anchors.length === 0) continue;
 
+    const mirrorRel = getMirrorPath(relPath, config.docsRoot);
+    const mirrorAbs = path.join(cwd, mirrorRel);
+    
+    let mirrorDoc = null;
+    if (fs.existsSync(mirrorAbs)) {
+      mirrorDoc = parseMirrorDoc(readFileSafe(mirrorAbs)!);
+    }
+
     // Check whole-file doc if requested
     const wholeFileAnchor = anchors.find(a => a.kind === 'whole-file');
     if (checkDocs && wholeFileAnchor) {
-      const mirrorRel = getMirrorPath(relPath, config.docsRoot);
-      const mirrorAbs = path.join(cwd, mirrorRel);
-
-      if (!fs.existsSync(mirrorAbs)) {
+      if (!mirrorDoc) {
         results.push({ sourceFile: relPath, mirrorFile: mirrorRel, status: 'missing-doc' });
       } else {
-        const doc = parseMirrorDoc(readFileSafe(mirrorAbs)!);
-        const section = doc.sections.find(s => s.kind === 'whole-file');
+        const section = mirrorDoc.sections.find(s => s.kind === 'whole-file');
         const currentHash = computeHash(content);
         const storedHash = section?.hash;
 
@@ -99,30 +101,46 @@ export async function runCheck(opts: CheckOptions): Promise<number> {
       const microAnchors = anchors.filter(a => a.kind === 'micro' && a.label);
       for (const anchor of microAnchors) {
         const label = anchor.label!;
-        const microRel = getMicroDocPath(relPath, label, config.microdocsRoot);
-        const microAbs = path.join(cwd, microRel);
-
-        const microCode = extractCodeSnippet(content, anchor, anchors, absPath, adapter);
+        const nextAnchor = anchors.find(a => a.lineIndex > anchor.lineIndex);
+        
+        // Scope resolution with GraphAdapter if CodeGraph active
+        if (adapter && anchor.autoScoped && anchor.scopeStartLine === undefined) {
+           const boundary = adapter.getNextNode(absPath, anchor.lineIndex + 1);
+           if (boundary) {
+             anchor.scopeStartLine = boundary.startLine - 1;
+             anchor.scopeEndLine = boundary.endLine;
+           }
+        }
+        
+        const microCode = extractMicroDocCode(content, anchor, nextAnchor?.lineIndex);
         const currentHash = computeHash(microCode);
 
-        if (!fs.existsSync(microAbs)) {
+        if (!mirrorDoc) {
           results.push({
             sourceFile: relPath,
-            mirrorFile: microRel,
+            mirrorFile: mirrorRel,
             status: 'missing-doc',
             isMicroDoc: true,
             targetLabel: label,
             currentHash,
           });
         } else {
-          const doc = parseMirrorDoc(readFileSafe(microAbs)!);
-          const section = doc.sections[0];
+          const section = mirrorDoc.sections.find(s => s.kind === 'micro' && s.label === label);
           const storedHash = section?.hash;
 
-          if (!storedHash) {
+          if (!section) {
+             results.push({
+               sourceFile: relPath,
+               mirrorFile: mirrorRel,
+               status: 'missing-doc',
+               isMicroDoc: true,
+               targetLabel: label,
+               currentHash,
+             });
+          } else if (!storedHash) {
             results.push({
               sourceFile: relPath,
-              mirrorFile: microRel,
+              mirrorFile: mirrorRel,
               status: 'no-hash',
               isMicroDoc: true,
               targetLabel: label,
@@ -131,7 +149,7 @@ export async function runCheck(opts: CheckOptions): Promise<number> {
           } else if (currentHash === storedHash) {
             results.push({
               sourceFile: relPath,
-              mirrorFile: microRel,
+              mirrorFile: mirrorRel,
               status: 'ok',
               isMicroDoc: true,
               targetLabel: label,
@@ -142,7 +160,7 @@ export async function runCheck(opts: CheckOptions): Promise<number> {
             const diff = computeDiff(section?.codeCopy ?? '', microCode);
             results.push({
               sourceFile: relPath,
-              mirrorFile: microRel,
+              mirrorFile: mirrorRel,
               status: 'stale',
               isMicroDoc: true,
               targetLabel: label,
@@ -157,64 +175,54 @@ export async function runCheck(opts: CheckOptions): Promise<number> {
   }
 
   // ── 2. Check for orphaned docs or removed annotations ─────────────────────
-  if (checkDocs) {
-    for (const mirrorRel of walkMirrorDocs(config.docsRoot, cwd)) {
-      try {
-        const sourceRel = getSourceFromMirror(mirrorRel, config.docsRoot);
-        if (targets.length > 0 && !matchesTargets(sourceRel, targets)) continue;
+  for (const mirrorRel of walkMirrorDocs(config.docsRoot, cwd)) {
+    try {
+      const sourceRel = getSourceFromMirror(mirrorRel, config.docsRoot);
+      if (targets.length > 0 && !matchesTargets(sourceRel, targets)) continue;
 
-        const sourceAbs = path.join(cwd, sourceRel);
-        if (!fs.existsSync(sourceAbs)) {
+      const sourceAbs = path.join(cwd, sourceRel);
+      if (!fs.existsSync(sourceAbs)) {
+        if (checkDocs) {
           results.push({ sourceFile: sourceRel, mirrorFile: mirrorRel, status: 'missing-source' });
-        } else {
-          // Source exists — verify that @syndocs annotation is still present
-          const sourceContent = readFileSafe(sourceAbs);
-          const langConfig = getLangConfig(sourceRel);
-          if (sourceContent && langConfig) {
-            const anchors = parseAnchors(sourceContent, langConfig);
-            if (!anchors.some(a => a.kind === 'whole-file')) {
-              results.push({ sourceFile: sourceRel, mirrorFile: mirrorRel, status: 'annotation-removed' });
+        }
+        continue;
+      }
+      
+      const sourceContent = readFileSafe(sourceAbs);
+      const langConfig = getLangConfig(sourceRel);
+      if (sourceContent && langConfig) {
+        const anchors = parseAnchors(sourceContent, langConfig);
+        const mirrorAbs = path.join(cwd, mirrorRel);
+        const mirrorDoc = parseMirrorDoc(readFileSafe(mirrorAbs)!);
+        
+        // Whole file check
+        if (checkDocs) {
+          if (!anchors.some(a => a.kind === 'whole-file')) {
+            const hasWholeFileSection = mirrorDoc.sections.some(s => s.kind === 'whole-file');
+            if (hasWholeFileSection) {
+               results.push({ sourceFile: sourceRel, mirrorFile: mirrorRel, status: 'annotation-removed' });
             }
           }
         }
-      } catch { /* skip malformed */ }
-    }
-  }
-
-  if (checkMicros) {
-    for (const microRel of walkMicroDocs(config.microdocsRoot, cwd)) {
-      try {
-        const { sourceRel, label } = getSourceFromMicroDoc(microRel, config.microdocsRoot);
-        if (targets.length > 0 && !matchesTargets(sourceRel, targets)) continue;
-
-        const sourceAbs = path.join(cwd, sourceRel);
-        if (!fs.existsSync(sourceAbs)) {
-          results.push({
-            sourceFile: sourceRel,
-            mirrorFile: microRel,
-            status: 'missing-source',
-            isMicroDoc: true,
-            targetLabel: label,
-          });
-        } else {
-          // Source exists — verify that @syndocs: <label> is still present
-          const sourceContent = readFileSafe(sourceAbs);
-          const langConfig = getLangConfig(sourceRel);
-          if (sourceContent && langConfig) {
-            const anchors = parseAnchors(sourceContent, langConfig);
-            if (!anchors.some(a => a.kind === 'micro' && a.label === label)) {
-              results.push({
-                sourceFile: sourceRel,
-                mirrorFile: microRel,
-                status: 'micro-annotation-removed',
-                isMicroDoc: true,
-                targetLabel: label,
-              });
-            }
+        
+        // Micro docs check
+        if (checkMicros) {
+          const microSections = mirrorDoc.sections.filter(s => s.kind === 'micro');
+          for (const section of microSections) {
+             const stillExists = anchors.some(a => a.kind === 'micro' && a.label === section.label);
+             if (!stillExists) {
+               results.push({
+                 sourceFile: sourceRel,
+                 mirrorFile: mirrorRel,
+                 status: 'micro-annotation-removed',
+                 isMicroDoc: true,
+                 targetLabel: section.label,
+               });
+             }
           }
         }
-      } catch { /* skip malformed */ }
-    }
+      }
+    } catch { /* skip malformed */ }
   }
 
   // Print results (strictly read-only, no files written)
@@ -233,33 +241,6 @@ export async function runCheck(opts: CheckOptions): Promise<number> {
   ).length;
 
   return failOnStale && bad > 0 ? 1 : 0;
-}
-
-function extractCodeSnippet(
-  content: string,
-  anchor: ParsedAnchor,
-  allAnchors: ParsedAnchor[],
-  absPath: string,
-  adapter: GraphAdapter,
-): string {
-  const lines = content.split('\n');
-  let startLine = anchor.lineIndex + 1;
-  let endLine: number | undefined;
-
-  if (adapter) {
-    const boundary = adapter.getNodeBoundary(absPath, startLine);
-    if (boundary) {
-      startLine = boundary.startLine - 1;
-      endLine = boundary.endLine;
-    }
-  }
-
-  if (endLine === undefined) {
-    const nextAnchor = allAnchors.find(a => a.lineIndex > anchor.lineIndex);
-    endLine = nextAnchor?.lineIndex ?? lines.length;
-  }
-
-  return lines.slice(startLine, endLine).join('\n').trim();
 }
 
 // ─── Output ───────────────────────────────────────────────────────────────────

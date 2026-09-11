@@ -1,6 +1,5 @@
 {
   "docsRoot": ".syndocs/docs",
-  "microdocsRoot": ".syndocs/microdocs",
   "guidesRoot": ".syndocs/guides",
   "ignore": ["node_modules", ".git", "dist", "build", ".next", "coverage", ".syndocs", "syndocs", ".codegraph", "graphify-out"]
 }

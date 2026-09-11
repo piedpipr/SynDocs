@@ -108,18 +108,22 @@ you edit docs.
 
 | Syntax | Meaning |
 |--------|---------|
-| `// @syndocs` | Whole-file mirror doc (JS/TS/PHP/Go/Rust/Java/…) |
-| `# @syndocs` | Whole-file mirror doc (Python/Ruby/YAML/…) |
-| `// @syndocs: label` | Micro-doc for the immediately following block |
-| `<!-- @syndocs -->` | Whole-file mirror doc (HTML/XML) |
-| `/* @syndocs: label */` | Micro-doc (CSS/SCSS) |
+| `// @synd` or `// @syndocs` | Whole-file doc (or auto-scoped if placed directly above a function, class, etc.) |
+| `# @synd` or `# @syndocs` | Whole-file doc / auto-scoped (Python, Ruby, YAML, etc.) |
+| `// @synd: label` or `// @syndocs: label` | Explicitly named micro-doc for the immediately following block |
+| `code... // @synd` | **Trailing inline annotation** (right side of line) — auto-scopes to that field, variable, schema, or block |
+| `<!-- @synd -->` or `<!-- @syndocs -->` | Whole-file / auto-scoped doc (HTML/XML) |
+| `/* @synd: label */` | Micro-doc (CSS/SCSS) |
+
+> **Notion-like Embedded Architecture:** All micro-docs are embedded directly within their parent mirror doc (`.syndocs/docs/path/to/file.ext.md`) as modular sections separated by `---` and `## @synd: label`. There is no separate `microdocs/` directory to manage.
 
 ### In composed guides (`guides/`)
 
 ```markdown
-@syndocs-embed: src/auth/Login.php
-@syndocs-embed: src/auth/Login.php#rate-limit-check
+@synd-embed: src/auth/Login.php
+@synd-embed: src/auth/Login.php#rate-limit-check
 ```
+*(Both `@synd-embed:` and `@syndocs-embed:` are supported)*
 
 Each embed carries its own `<!-- syndocs-synced: hash -->` stamp and gets its
 own independent drift check.
@@ -130,28 +134,35 @@ own independent drift check.
 
 ```
 syndocs init [--dry-run] [--skip-codegraph]
-  Scan for @syndocs markers, create missing mirror docs.
+  Scan for @synd / @syndocs markers, create missing mirror docs with embedded sections.
   Runs codegraph init automatically if CodeGraph is on PATH.
 
-syndocs check [--no-annotate] [--fail] [--no-blast-radius]
-  Detect drift. Use --fail in CI to exit 1 when anything is stale.
-  --no-annotate: read-only, no writes to mirror docs (good for CI).
+syndocs check [targets...] [--docs] [--microdocs] [--fail] [--no-blast-radius]
+  Detect drift across whole files and embedded micro-doc sections.
+  Use --fail in CI to exit 1 when anything is stale.
 
-syndocs update [file …] [--dry-run]
-  Refresh hash + code copy, clear pending diffs.
+syndocs update [targets...] [--docs] [--microdocs] [--dry-run] [--prune]
+  Refresh hashes + code copies, auto-create embedded sections for new annotations.
   Uses CodeGraph for AST-exact micro-doc boundaries when available.
-  Omit files to update everything stale.
+
+syndocs prune [targets...] [--dry-run]
+  Clean up orphaned sections or docs whose annotations were removed from source.
+
+syndocs tree [targets...] [--stale]
+  Visualize documentation hierarchy tree with micro-docs nested directly under parent files.
 
 syndocs graph-link [--dry-run]
   Write [[wiki-links]] into mirror docs from CodeGraph call/import edges.
-  Rerun after any syndocs init or codegraph index to keep links current.
 
 syndocs serve [--port <n>]
   Start the web UI at http://localhost:4748
-  D3 force graph, rendered markdown, drift badges, live reload.
+  D3 force graph, nested document hierarchy, live reload, drift badges.
 
 syndocs lint-embeds
-  Validate all @syndocs-embed references in guides/ files.
+  Validate all @synd-embed / @syndocs-embed references in guides/ files.
+
+syndocs install | reinstall | self-update | uninstall
+  Manage SynDocs installation and binaries directly via the CLI.
 ```
 
 ---

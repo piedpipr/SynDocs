@@ -59,19 +59,56 @@ export function getCodeBlockLang(filePath: string): string {
   return getLangConfig(filePath)?.codeBlock ?? '';
 }
 
-// Build a regex that matches a comment containing @syndocs (or @syndocs: label).
-// Uses string concatenation (not template literals) so that \\s escape sequences
-// survive into the RegExp engine correctly.
+// ─── Regex builders ───────────────────────────────────────────────────────────
+// All regex builders use RegExp constructor with regular string literals.
+// In a regular string, `\\s` becomes the regex token `\s` (whitespace).
+
+/**
+ * Build a regex that matches a FULL-LINE comment containing @syndocs or @synd.
+ * The entire line must be a comment (no code before it).
+ * Captures: group 1 = optional label after the colon.
+ */
 export function buildAnchorRegex(style: CommentStyle): RegExp {
-  // In a regular string literal, \\s compiles to \s which RegExp reads as whitespace.
-  const ws   = '\\s*';
-  const body = '@syndocs(?::\\s*(\\S+))?';
+  const body = '@(?:syndocs|synd)(?:\\s*:\\s*(\\S+))?';
 
   switch (style) {
-    case '//':  return new RegExp('^' + ws + '\\/\\/' + ws + body);
-    case '#':   return new RegExp('^' + ws + '#'      + ws + body);
-    case '--':  return new RegExp('^' + ws + '--'     + ws + body);
-    case '<!--': return new RegExp('^' + ws + '<!--'  + ws + body + ws + '-->');
-    case '/*':  return new RegExp('^' + ws + '\\/\\*' + ws + body + ws + '\\*\\/');
+    case '//':   return new RegExp('^\\s*\\/\\/\\s*' + body);
+    case '#':    return new RegExp('^\\s*#\\s*'      + body);
+    case '--':   return new RegExp('^\\s*--\\s*'     + body);
+    case '<!--': return new RegExp('^\\s*<!--\\s*'   + body + '\\s*-->');
+    case '/*':   return new RegExp('^\\s*\\/\\*\\s*' + body + '\\s*\\*\\/');
+  }
+}
+
+/**
+ * Build a regex that matches an INLINE (trailing) @syndocs or @synd annotation.
+ * These appear after code on the same line: `const X = 1; // @synd`
+ * Captures: group 1 = optional label.
+ */
+export function buildInlineAnchorRegex(style: CommentStyle): RegExp {
+  const body = '@(?:syndocs|synd)(?:\\s*:\\s*(\\S+))?';
+
+  switch (style) {
+    case '//':   return new RegExp('.+\\s*\\/\\/\\s*' + body);
+    case '#':    return new RegExp('.+\\s*#\\s*'      + body);
+    case '--':   return new RegExp('.+\\s*--\\s*'     + body);
+    case '<!--': return new RegExp('.+\\s*<!--\\s*'   + body + '\\s*-->');
+    case '/*':   return new RegExp('.+\\s*\\/\\*\\s*' + body + '\\s*\\*\\/');
+  }
+}
+
+/**
+ * Build a regex that matches @syndocs-embed or @synd-embed directives.
+ * Captures: group 1 = target path (possibly with #label).
+ */
+export function buildEmbedRegex(style: CommentStyle): RegExp {
+  const body = '@(?:syndocs|synd)-embed:\\s*(\\S+)';
+
+  switch (style) {
+    case '//':   return new RegExp('^\\s*\\/\\/\\s*' + body);
+    case '#':    return new RegExp('^\\s*#\\s*'      + body);
+    case '--':   return new RegExp('^\\s*--\\s*'     + body);
+    case '<!--': return new RegExp('^\\s*<!--\\s*'   + body + '\\s*-->');
+    case '/*':   return new RegExp('^\\s*\\/\\*\\s*' + body + '\\s*\\*\\/');
   }
 }

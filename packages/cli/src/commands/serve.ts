@@ -20,7 +20,6 @@ import {
   getLangConfig,
   getMirrorPath,
   getSourceFromMirror,
-  getSourceFromMicroDoc,
   parseAnchors,
   parseMirrorDoc,
   renderMirrorDoc,
@@ -37,7 +36,6 @@ import {
   readFileSafe,
   walkSourceFiles,
   walkMirrorDocs,
-  walkMicroDocs,
   walkGuides,
   writeFile,
   loadGraphAdapter,
@@ -305,18 +303,19 @@ function saveDocumentNotes(
       // id is e.g. "packages/core/src/hash.ts#compute-hash"
       const [sourceRel, label] = id.split('#');
       if (!sourceRel || !label) return false;
-      const microRel = path.join(config.microdocsRoot, sourceRel, `${label}.md`);
-      const microAbs = path.join(cwd, microRel);
-      if (!fs.existsSync(microAbs)) return false;
+      const mirrorRel = getMirrorPath(sourceRel, config.docsRoot);
+      const mirrorAbs = path.join(cwd, mirrorRel);
+      if (!fs.existsSync(mirrorAbs)) return false;
 
-      const raw = readFileSafe(microAbs);
+      const raw = readFileSafe(mirrorAbs);
       if (!raw) return false;
 
       const parsed = parseMirrorDoc(raw);
-      if (parsed.sections.length > 0) {
-        parsed.sections[0].notes = editedNotes;
+      const section = parsed.sections.find(s => s.kind === 'micro' && s.label === label);
+      if (section) {
+        section.notes = editedNotes;
       }
-      writeFile(microAbs, renderMirrorDoc(parsed));
+      writeFile(mirrorAbs, renderMirrorDoc(parsed));
       return true;
     }
 
@@ -408,45 +407,30 @@ async function buildData(cwd: string, config: SynDocsConfig): Promise<SynDocsDat
     // Extract table edges
     const graphEdges = extractEdgesFromContent(content, sourceRel);
     edges.push(...graphEdges);
-  }
 
-  // 2. Process micro-docs
-  for (const microRel of walkMicroDocs(config.microdocsRoot, cwd)) {
-    try {
-      const { sourceRel, label } = getSourceFromMicroDoc(microRel, config.microdocsRoot);
-      const microAbs = path.join(cwd, microRel);
-      const content = readFileSafe(microAbs);
-      if (!content) continue;
-
-      const doc = parseMirrorDoc(content);
-      const section = doc.sections[0];
-      const id = `${sourceRel}#${label}`;
-
-      let status: DocNode['status'] = 'ok';
-      const sourceAbs = path.join(cwd, sourceRel);
-      if (!fs.existsSync(sourceAbs)) {
-        status = 'missing';
-      }
+    // Micro-doc sections
+    for (const microSection of doc.sections.filter(s => s.kind === 'micro')) {
+      const id = `${sourceRel}#${microSection.label}`;
 
       nodes.push({
         id,
-        label: `#${label}`,
-        status,
+        label: `#${microSection.label}`,
+        status, // Inherits missing status from parent if source deleted
         group: sourceRel,
         type: 'microdoc',
-        targetLabel: label,
-        lineCount: section?.codeCopy?.split('\n').length ?? 0,
+        targetLabel: microSection.label,
+        lineCount: microSection.codeCopy?.split('\n').length ?? 0,
       });
 
       docs[id] = {
-        title: `${path.basename(sourceRel)} #${label}`,
-        content,
+        title: `${path.basename(sourceRel)} #${microSection.label}`,
+        content, // the UI splits this out or shows it differently
         status,
         type: 'microdoc',
         sourceFile: sourceRel,
-        codeCopy: section?.codeCopy ?? '',
-        codeLanguage: section?.codeLanguage ?? 'ts',
-        notes: section?.notes ?? '',
+        codeCopy: microSection.codeCopy ?? '',
+        codeLanguage: microSection.codeLanguage ?? 'ts',
+        notes: microSection.notes ?? '',
         tokens: [],
         downstream: [],
       };
@@ -457,11 +441,9 @@ async function buildData(cwd: string, config: SynDocsConfig): Promise<SynDocsDat
         target: sourceRel,
         kind: 'contains',
         line: 0,
-        symbol: label,
+        symbol: microSection.label ?? '',
         why: 'Part of source file',
       });
-    } catch {
-      continue;
     }
   }
 
@@ -573,16 +555,18 @@ function extractEdgesFromContent(content: string, sourceId: string): DocEdge[] {
 function buildDocsTree(nodes: DocNode[]): TreeNode {
   const root: TreeNode = { name: '.syndocs', path: '.syndocs', type: 'dir', children: [] };
   const docsDir: TreeNode = { name: 'docs', path: '.syndocs/docs', type: 'dir', children: [] };
-  const microDir: TreeNode = { name: 'microdocs', path: '.syndocs/microdocs', type: 'dir', children: [] };
   const guidesDir: TreeNode = { name: 'guides', path: '.syndocs/guides', type: 'dir', children: [] };
 
-  root.children!.push(docsDir, microDir, guidesDir);
+  root.children!.push(docsDir, guidesDir);
 
   for (const node of nodes) {
     if (node.type === 'doc') {
       addPathToTree(docsDir, node.id, node);
     } else if (node.type === 'microdoc') {
-      addPathToTree(microDir, node.id, node);
+      // The id is `src/foo.ts#label`. The parent file is `src/foo.ts`.
+      // We want the microdoc to appear as a child of the `src/foo.ts` file node.
+      const [parentPath, label] = node.id.split('#');
+      addPathToTree(docsDir, parentPath, { ...node, id: node.id, label: '#' + label }, true);
     } else if (node.type === 'guide') {
       guidesDir.children!.push({
         name: node.label,
@@ -596,10 +580,11 @@ function buildDocsTree(nodes: DocNode[]): TreeNode {
   return root;
 }
 
-function addPathToTree(parent: TreeNode, relPath: string, node: DocNode): void {
+function addPathToTree(parent: TreeNode, relPath: string, node: DocNode, isMicroDoc = false): void {
   const parts = relPath.split('/');
   let curr = parent;
 
+  // Traverse directories
   for (let i = 0; i < parts.length - 1; i++) {
     const p = parts[i];
     let child = curr.children?.find(c => c.name === p && c.type === 'dir');
@@ -611,15 +596,39 @@ function addPathToTree(parent: TreeNode, relPath: string, node: DocNode): void {
     curr = child;
   }
 
+  const fileName = parts[parts.length - 1];
   curr.children = curr.children ?? [];
-  curr.children.push({
-    name: parts[parts.length - 1],
-    path: node.id,
-    type: node.type,
-    status: node.status,
-    lineCount: node.lineCount,
-    targetLabel: node.targetLabel,
-  });
+
+  let fileNode = curr.children.find(c => c.name === fileName && c.type === 'doc');
+  
+  if (!fileNode) {
+    fileNode = {
+      name: fileName,
+      path: relPath, // the file's path
+      type: 'doc', // may be updated if it's the actual file node
+      status: 'missing', // fallback until actual doc node is added
+      children: [],
+    };
+    curr.children.push(fileNode);
+  }
+
+  if (isMicroDoc) {
+    fileNode.children = fileNode.children ?? [];
+    fileNode.children.push({
+      name: node.label,
+      path: node.id,
+      type: 'microdoc',
+      status: node.status,
+      lineCount: node.lineCount,
+      targetLabel: node.targetLabel,
+    });
+  } else {
+    // Update the file node with actual doc info
+    fileNode.status = node.status;
+    fileNode.lineCount = node.lineCount;
+    // ensure children array exists if we are overriding an earlier skeleton
+    fileNode.children = fileNode.children ?? [];
+  }
 }
 
 function buildCodebaseTree(cwd: string, config: SynDocsConfig, nodes: DocNode[]): TreeNode {

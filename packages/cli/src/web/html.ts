@@ -948,7 +948,7 @@ function buildDomTree(node, filter = '') {
   const el = document.createElement('div');
   el.className = 'tree-node';
 
-  const isDir = node.type === 'dir' || Boolean(node.children);
+  const hasChildren = Boolean(node.children && node.children.length > 0);
   const row = document.createElement('div');
   row.className = 'tree-row' + (currentDocId === node.path ? ' active' : '');
 
@@ -957,64 +957,68 @@ function buildDomTree(node, filter = '') {
     el.style.display = 'none';
   }
 
-  if (isDir) {
+  let childrenContainer: HTMLDivElement | null = null;
+  if (hasChildren) {
+    childrenContainer = document.createElement('div');
+    childrenContainer.className = 'tree-children';
+  }
+
+  if (hasChildren) {
     const toggle = document.createElement('span');
     toggle.className = 'tree-toggle';
     toggle.textContent = '▼';
-    row.appendChild(toggle);
-
-    const icon = document.createElement('span');
-    icon.className = 'tree-icon';
-    icon.textContent = node.name === 'microdocs' ? '🔬' : node.name === 'guides' ? '📖' : '📁';
-    row.appendChild(icon);
-
-    const label = document.createElement('span');
-    label.className = 'tree-label';
-    label.textContent = node.name;
-    row.appendChild(label);
-
-    const childrenContainer = document.createElement('div');
-    childrenContainer.className = 'tree-children';
-
-    row.addEventListener('click', (e) => {
+    toggle.addEventListener('click', (e) => {
       e.stopPropagation();
-      const isCollapsed = childrenContainer.classList.toggle('collapsed');
-      toggle.textContent = isCollapsed ? '▶' : '▼';
-    });
-
-    el.appendChild(row);
-
-    if (node.children) {
-      for (const child of node.children) {
-        childrenContainer.appendChild(buildDomTree(child, filter));
+      if (childrenContainer) {
+        const isCollapsed = childrenContainer.classList.toggle('collapsed');
+        toggle.textContent = isCollapsed ? '▶' : '▼';
       }
-    }
-    el.appendChild(childrenContainer);
+    });
+    row.appendChild(toggle);
   } else {
     const spacer = document.createElement('span');
     spacer.style.width = '14px';
     row.appendChild(spacer);
+  }
 
-    const icon = document.createElement('span');
-    icon.className = 'tree-icon';
-    icon.textContent = node.type === 'microdoc' ? '🏷️' : node.type === 'guide' ? '📖' : '📄';
-    row.appendChild(icon);
+  const icon = document.createElement('span');
+  icon.className = 'tree-icon';
+  icon.textContent = node.type === 'microdoc' ? '🏷️' : node.type === 'guide' ? '📖' : node.type === 'doc' ? '📄' : '📁';
+  row.appendChild(icon);
 
-    const label = document.createElement('span');
-    label.className = 'tree-label';
-    label.textContent = node.targetLabel ? '#' + node.targetLabel : node.name;
-    label.title = node.path;
-    row.appendChild(label);
+  const label = document.createElement('span');
+  label.className = 'tree-label';
+  label.textContent = node.targetLabel ? '#' + node.targetLabel : node.name;
+  label.title = node.path;
+  row.appendChild(label);
 
-    if (node.status && node.status !== 'none') {
-      const badge = document.createElement('span');
-      badge.className = 'tree-badge ' + node.status;
-      badge.textContent = node.status;
-      row.appendChild(badge);
-    }
+  if (node.status && node.status !== 'none') {
+    const badge = document.createElement('span');
+    badge.className = 'tree-badge ' + node.status;
+    badge.textContent = node.status;
+    row.appendChild(badge);
+  }
 
+  if (node.type === 'dir') {
+    row.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (childrenContainer) {
+        const isCollapsed = childrenContainer.classList.toggle('collapsed');
+        const toggle = row.querySelector('.tree-toggle');
+        if (toggle) toggle.textContent = isCollapsed ? '▶' : '▼';
+      }
+    });
+  } else {
     row.addEventListener('click', () => openDoc(node.path));
-    el.appendChild(row);
+  }
+
+  el.appendChild(row);
+
+  if (hasChildren && childrenContainer && node.children) {
+    for (const child of node.children) {
+      childrenContainer.appendChild(buildDomTree(child, filter));
+    }
+    el.appendChild(childrenContainer);
   }
 
   return el;

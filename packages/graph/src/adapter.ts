@@ -206,6 +206,98 @@ export class CodeGraphAdapter {
   }
 
   /**
+   * Find the exact AST declaration immediately starting at or below fromLine.
+   */
+  getNextNode(absOrRelPath: string, fromLine: number): NodeBoundary | null {
+    const rel = this._toRel(absOrRelPath);
+    try {
+      const stmt = this.db.prepare(`
+        SELECT name, kind, start_line, end_line
+        FROM nodes
+        WHERE file_path = ?
+          AND start_line >= ?
+          AND kind IN ('function','method','class','struct','property','field','constant','variable','enum')
+        ORDER BY start_line ASC
+        LIMIT 1
+      `);
+      const row = stmt.get(rel, fromLine) as any;
+      if (!row) return null;
+      return {
+        name:      String(row.name),
+        kind:      String(row.kind),
+        startLine: Number(row.start_line),
+        endLine:   Number(row.end_line),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Find the parent function or class enclosing the given line.
+   */
+  getEnclosingScope(absOrRelPath: string, line: number): NodeBoundary | null {
+    const rel = this._toRel(absOrRelPath);
+    try {
+      const stmt = this.db.prepare(`
+        SELECT name, kind, start_line, end_line
+        FROM nodes
+        WHERE file_path = ?
+          AND start_line <= ?
+          AND end_line >= ?
+          AND kind IN ('function','method','class')
+        ORDER BY (end_line - start_line) ASC
+        LIMIT 1
+      `);
+      const row = stmt.get(rel, line, line) as any;
+      if (!row) return null;
+      return {
+        name:      String(row.name),
+        kind:      String(row.kind),
+        startLine: Number(row.start_line),
+        endLine:   Number(row.end_line),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Outbound cross-file edges that originate strictly within [startLine, endLine).
+   */
+  getScopedEdges(absOrRelPath: string, startLine: number, endLine: number): GraphEdge[] {
+    const rel = this._toRel(absOrRelPath);
+    try {
+      const stmt = this.db.prepare(`
+        SELECT
+          e.kind,
+          COALESCE(e.line, 0)   AS source_line,
+          sn.name               AS source_symbol,
+          tn.file_path          AS target_file,
+          tn.name               AS target_symbol
+        FROM edges e
+        JOIN nodes sn ON e.source = sn.id
+        JOIN nodes tn ON e.target = tn.id
+        WHERE sn.file_path = ?
+          AND tn.file_path != ?
+          AND e.kind IN ('calls','imports','extends','implements','references')
+          AND e.line >= ?
+          AND e.line < ?
+        ORDER BY e.line ASC, sn.name
+      `);
+      return (stmt.all(rel, rel, startLine, endLine) as any[]).map(r => ({
+        kind:         r.kind,
+        sourceLine:   Number(r.source_line),
+        sourceSymbol: String(r.source_symbol),
+        targetFile:   String(r.target_file),
+        targetSymbol: r.target_symbol != null ? String(r.target_symbol) : null,
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  /**
    * Files that import or call into the given file.
    * Used by `syndocs check` to warn about downstream documented files
    * when a source file is found stale.

@@ -3,17 +3,19 @@ import fs from 'fs';
 import path from 'path';
 import {
   getLangConfig,
-  getSourceFromMicroDoc,
   getSourceFromMirror,
   parseAnchors,
+  parseMirrorDoc,
+  renderMirrorDoc,
+  DocSection
 } from '@syndocs/core';
 import {
   SynDocsConfig,
   c,
   readFileSafe,
   walkMirrorDocs,
-  walkMicroDocs,
   matchesTargets,
+  writeFile,
 } from '../utils';
 
 export interface PruneOptions {
@@ -33,86 +35,83 @@ export async function runPrune(opts: PruneOptions): Promise<void> {
   const pruneDocs = collection === 'all' || collection === 'docs';
   const pruneMicros = collection === 'all' || collection === 'microdocs';
 
-  let pruned = 0;
+  let prunedDocs = 0;
+  let prunedBlocks = 0;
 
-  // 1. Whole-file docs
-  if (pruneDocs) {
-    for (const mirrorRel of walkMirrorDocs(config.docsRoot, cwd)) {
-      try {
-        const sourceRel = getSourceFromMirror(mirrorRel, config.docsRoot);
-        if (targets.length > 0 && !matchesTargets(sourceRel, targets)) continue;
+  for (const mirrorRel of walkMirrorDocs(config.docsRoot, cwd)) {
+    try {
+      const sourceRel = getSourceFromMirror(mirrorRel, config.docsRoot);
+      if (targets.length > 0 && !matchesTargets(sourceRel, targets)) continue;
 
-        const sourceAbs = path.join(cwd, sourceRel);
-        const mirrorAbs = path.join(cwd, mirrorRel);
+      const sourceAbs = path.join(cwd, sourceRel);
+      const mirrorAbs = path.join(cwd, mirrorRel);
+      const mirrorContent = readFileSafe(mirrorAbs);
+      if (!mirrorContent) continue;
+      
+      const mirrorDoc = parseMirrorDoc(mirrorContent);
+      
+      // If source file doesn't exist, prune the whole document
+      if (!fs.existsSync(sourceAbs)) {
+         if (pruneDocs || pruneMicros) { // Pruning either will remove it if source is gone
+            if (!dryRun) fs.unlinkSync(mirrorAbs);
+            console.log('  ' + c.red('\u2717 pruned doc') + '  ' + mirrorRel + '  ' + c.dim('(source file deleted)'));
+            prunedDocs++;
+         }
+         continue;
+      }
+      
+      const sourceContent = readFileSafe(sourceAbs);
+      const langConfig = getLangConfig(sourceRel);
+      if (!sourceContent || !langConfig) continue;
+      
+      const anchors = parseAnchors(sourceContent, langConfig);
+      const newSections: DocSection[] = [];
+      let didChange = false;
 
-        let isOrphan = false;
-        let reason = '';
-
-        if (!fs.existsSync(sourceAbs)) {
-          isOrphan = true;
-          reason = 'source file deleted';
+      for (const section of mirrorDoc.sections) {
+        if (section.kind === 'whole-file') {
+           if (pruneDocs && !anchors.some(a => a.kind === 'whole-file')) {
+              console.log('  ' + c.red('\u2717 pruned doc') + '  ' + mirrorRel + '  ' + c.dim('(@synd annotation removed from source)'));
+              didChange = true;
+              prunedDocs++;
+              // If we prune the whole file doc, we could decide to keep the file if there are micros, 
+              // but Notion-like usually needs the file header. For now just omit section.
+           } else {
+              newSections.push(section);
+           }
+        } else if (section.kind === 'micro') {
+           if (pruneMicros && !anchors.some(a => a.kind === 'micro' && a.label === section.label)) {
+              console.log('  ' + c.red('\u2717 pruned block') + '  ' + sourceRel + ' ' + c.dim('#' + section.label));
+              didChange = true;
+              prunedBlocks++;
+           } else {
+              newSections.push(section);
+           }
         } else {
-          const sourceContent = readFileSafe(sourceAbs);
-          const langConfig = getLangConfig(sourceRel);
-          if (sourceContent && langConfig) {
-            const anchors = parseAnchors(sourceContent, langConfig);
-            if (!anchors.some(a => a.kind === 'whole-file')) {
-              isOrphan = true;
-              reason = '@syndocs annotation removed from source';
-            }
-          }
+           newSections.push(section); // Preserve embeds etc if any
         }
+      }
 
-        if (isOrphan) {
-          if (!dryRun) fs.unlinkSync(mirrorAbs);
-          console.log('  ' + c.red('\u2717 pruned') + '  ' + mirrorRel + '  ' + c.dim('(' + reason + ')'));
-          pruned++;
-        }
-      } catch { /* skip malformed */ }
-    }
-  }
-
-  // 2. Micro-docs
-  if (pruneMicros) {
-    for (const microRel of walkMicroDocs(config.microdocsRoot, cwd)) {
-      try {
-        const { sourceRel, label } = getSourceFromMicroDoc(microRel, config.microdocsRoot);
-        if (targets.length > 0 && !matchesTargets(sourceRel, targets)) continue;
-
-        const sourceAbs = path.join(cwd, sourceRel);
-        const microAbs = path.join(cwd, microRel);
-
-        let isOrphan = false;
-        let reason = '';
-
-        if (!fs.existsSync(sourceAbs)) {
-          isOrphan = true;
-          reason = 'source file deleted';
-        } else {
-          const sourceContent = readFileSafe(sourceAbs);
-          const langConfig = getLangConfig(sourceRel);
-          if (sourceContent && langConfig) {
-            const anchors = parseAnchors(sourceContent, langConfig);
-            if (!anchors.some(a => a.kind === 'micro' && a.label === label)) {
-              isOrphan = true;
-              reason = `micro-doc label #${label} removed from source`;
-            }
-          }
-        }
-
-        if (isOrphan) {
-          if (!dryRun) fs.unlinkSync(microAbs);
-          console.log('  ' + c.red('\u2717 pruned') + '  ' + microRel + '  ' + c.dim('(' + reason + ')'));
-          pruned++;
-        }
-      } catch { /* skip malformed */ }
-    }
+      if (didChange) {
+         if (newSections.length === 0) {
+            if (!dryRun) fs.unlinkSync(mirrorAbs);
+         } else {
+            if (!dryRun) writeFile(mirrorAbs, renderMirrorDoc({ title: mirrorDoc.title, sections: newSections }));
+         }
+      }
+    } catch { /* skip malformed */ }
   }
 
   console.log('');
-  if (pruned === 0) {
-    console.log('  ' + c.green('\u2713') + ' No orphaned documentation files found.');
+  if (prunedDocs === 0 && prunedBlocks === 0) {
+    console.log('  ' + c.green('\u2713') + ' No orphaned documentation found.');
   } else {
-    console.log('  ' + c.bold('Result:') + '  ' + c.red(String(pruned)) + ' orphaned files ' + (dryRun ? 'would be removed' : 'pruned'));
+    console.log(
+       '  ' + c.bold('Result:') + '  ' 
+       + (prunedDocs ? c.red(String(prunedDocs)) + ' orphaned docs ' : '')
+       + (prunedDocs && prunedBlocks ? ', ' : '')
+       + (prunedBlocks ? c.red(String(prunedBlocks)) + ' orphaned blocks ' : '')
+       + (dryRun ? 'would be removed' : 'pruned')
+    );
   }
 }

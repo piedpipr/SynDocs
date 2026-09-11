@@ -1,5 +1,5 @@
 # types.ts
-<!-- syndocs-hash: 16a73b13d77b -->
+<!-- syndocs-hash: ac11ca0a3497 -->
 
 ```ts
 // @syndocs
@@ -17,8 +17,14 @@ export interface LanguageConfig {
 
 export interface ParsedAnchor {
   kind: 'whole-file' | 'micro';
-  label?: string;    // only for @syndocs: label
-  lineIndex: number; // 0-based line in the source file
+  label?: string;          // only for @syndocs: label / @synd: label
+  lineIndex: number;       // 0-based line in the source file
+  autoScoped?: boolean;    // true when label was auto-derived from code element
+  inline?: boolean;        // true when annotation is trailing (right side of code)
+  elementKind?: string;    // 'function', 'class', 'field', 'variable', etc.
+  elementName?: string;    // 'parseAnchors', 'API_KEY', etc.
+  scopeStartLine?: number; // 0-based start of scoped code (inclusive)
+  scopeEndLine?: number;   // 0-based end of scoped code (exclusive)
 }
 
 // ─── Embed markers found in composed docs (guides/) ───────────────────────────
@@ -41,6 +47,10 @@ export interface DocSection {
   codeLanguage?: string;
   notes: string;
   pendingDiff?: string;
+  elementKind?: string;
+  elementName?: string;
+  scopeStartLine?: number;
+  scopeEndLine?: number;
 }
 
 export interface MirrorDocData {
@@ -95,5 +105,44 @@ export interface LintResult {
 ```
 
 ## Notes
+
+> _Add documentation notes here._
+
+---
+
+## @synd: line-L73
+<!-- syndocs-hash: 7402b4cafaa7 -->
+
+```ts
+| 'missing-source'           // mirror doc exists but source file is gone
+  | 'annotation-removed'       // mirror doc exists but whole-file @syndocs removed from source
+  | 'micro-annotation-removed' // micro-doc exists but @syndocs: label removed from source
+  | 'no-hash';                 // mirror doc has no hash yet (freshly init'd)
+
+export interface CheckResult {
+  sourceFile: string;
+  mirrorFile: string;
+  status: CheckStatus;
+  currentHash?: string;
+  storedHash?: string;
+  diff?: string;
+  isMicroDoc?: boolean;
+  targetLabel?: string;
+  notes?: string;
+}
+
+// ─── Results from syndocs lint-embeds ────────────────────────────────────────
+
+export type LintStatus = 'ok' | 'broken-path' | 'broken-label';
+
+export interface LintResult {
+  composedFile: string;
+  embed: ParsedEmbed;
+  status: LintStatus;
+  message?: string;
+}
+```
+
+### Notes
 
 > _Add documentation notes here._
