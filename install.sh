@@ -1,281 +1,550 @@
 ```bash
 #!/usr/bin/env bash
-# SynDocs installer
+
+# ==============================================================================
+# SynDocs Installer
+# ==============================================================================
 #
-# Usage:
+# One-line install:
+#
+#   bash <(curl -fsSL https://raw.githubusercontent.com/piedpipr/SynDocs/main/install.sh)
+#
+# Or:
+#
 #   curl -fsSL https://raw.githubusercontent.com/piedpipr/SynDocs/main/install.sh | bash
 #
-# Optional:
-#   SYNDOCS_DIR=/some/path curl -fsSL ... | bash
+# Environment:
 #
-set -euo pipefail
+#   SYNDOCS_DIR=/custom/path
+#
+# ==============================================================================
+
+set -Eeuo pipefail
 
 REPO="https://github.com/piedpipr/SynDocs.git"
 INSTALL_DIR="${SYNDOCS_DIR:-${HOME}/.syndocs}"
 BIN_DIR="${HOME}/.local/bin"
 
-# ── Colours ───────────────────────────────────────────────────────────────────
+VERSION="0.2.0"
 
-if [ -t 1 ]; then
-  BOLD='\033[1m'
-  GREEN='\033[0;32m'
-  YELLOW='\033[0;33m'
-  RED='\033[0;31m'
-  CYAN='\033[0;36m'
-  DIM='\033[2m'
-  RESET='\033[0m'
+# ==============================================================================
+# Terminal
+# ==============================================================================
+
+if [[ -t 1 ]]; then
+    BOLD="\033[1m"
+    DIM="\033[2m"
+    RED="\033[31m"
+    GREEN="\033[32m"
+    YELLOW="\033[33m"
+    BLUE="\033[34m"
+    MAGENTA="\033[35m"
+    CYAN="\033[36m"
+    WHITE="\033[37m"
+    RESET="\033[0m"
 else
-  BOLD=''
-  GREEN=''
-  YELLOW=''
-  RED=''
-  CYAN=''
-  DIM=''
-  RESET=''
+    BOLD=""
+    DIM=""
+    RED=""
+    GREEN=""
+    YELLOW=""
+    BLUE=""
+    MAGENTA=""
+    CYAN=""
+    WHITE=""
+    RESET=""
 fi
 
-step()  { echo -e "  ${GREEN}▸${RESET} $1"; }
-warn()  { echo -e "  ${YELLOW}⚠${RESET}  $1"; }
-fatal() { echo -e "\n  ${RED}Error:${RESET} $1\n"; exit 1; }
-info()  { echo -e "  ${DIM}$1${RESET}"; }
+# ==============================================================================
+# Output helpers
+# ==============================================================================
+
+line() {
+    printf '%b\n' "${DIM}────────────────────────────────────────────────────────────────────────${RESET}"
+}
+
+title() {
+    echo ""
+    printf '%b\n' "${BOLD}${CYAN}▸ $1${RESET}"
+    line
+}
+
+info() {
+    printf '  %b %s\n' "${CYAN}●${RESET}" "$*"
+}
+
+success() {
+    printf '  %b %s\n' "${GREEN}✓${RESET}" "$*"
+}
+
+warn() {
+    printf '  %b %s\n' "${YELLOW}⚠${RESET}" "$*"
+}
+
+error() {
+    printf '  %b %s\n' "${RED}✗${RESET}" "$*" >&2
+}
+
+detail() {
+    printf '    %b%s%b\n' "${DIM}" "$*" "${RESET}"
+}
+
+die() {
+    echo ""
+    error "$*"
+    echo ""
+    exit 1
+}
+
+# ==============================================================================
+# Error handler
+# ==============================================================================
+
+on_error() {
+    local exit_code=$?
+    local line_no=$1
+
+    echo ""
+    error "Installation failed."
+    detail "Exit code : ${exit_code}"
+    detail "Line      : ${line_no}"
+    detail "Directory : ${PWD}"
+    detail "Home      : ${HOME}"
+    echo ""
+    detail "If this is a bug, please report it:"
+    detail "https://github.com/piedpipr/SynDocs/issues"
+    echo ""
+
+    exit "${exit_code}"
+}
+
+trap 'on_error $LINENO' ERR
+
+# ==============================================================================
+# Banner
+# ==============================================================================
+
+clear 2>/dev/null || true
 
 echo ""
-echo -e "  ${BOLD}${CYAN}SynDocs${RESET} installer"
+printf '%b\n' "${CYAN}${BOLD}"
+echo "   ███████╗██╗   ██╗███╗   ██╗██████╗  ██████╗  ██████╗███████╗"
+echo "   ██╔════╝╚██╗ ██╔╝████╗  ██║██╔══██╗██╔═══██╗██╔════╝██╔════╝"
+echo "   ███████╗ ╚████╔╝ ██╔██╗ ██║██║  ██║██║   ██║██║     ███████╗"
+echo "   ╚════██║  ╚██╔╝  ██║╚██╗██║██║  ██║██║   ██║██║     ╚════██║"
+echo "   ███████║   ██║   ██║ ╚████║██████╔╝╚██████╔╝╚██████╗███████║"
+echo "   ╚══════╝   ╚═╝   ╚═╝  ╚═══╝╚═════╝  ╚═════╝  ╚═════╝╚══════╝"
+printf '%b\n' "${RESET}"
+
 echo ""
+printf '   %b%s%b\n' "${BOLD}" "Developer documentation that stays in sync." "${RESET}"
+echo ""
+line
 
-# ── Validate environment ──────────────────────────────────────────────────────
+# ==============================================================================
+# Environment
+# ==============================================================================
 
-if [ -z "${HOME:-}" ]; then
-  fatal "\$HOME is not set. Please run this installer from a normal user shell."
-fi
+title "Environment"
 
-case "${HOME}" in
-  /home/claude|/home/*|/Users/*|/root|/root/*)
-    ;;
-  *)
-    warn "Using non-standard home directory: ${HOME}"
-    ;;
-esac
-
-# Don't accidentally install into /
-if [ "${HOME}" = "/" ]; then
-  fatal "HOME=/ is not a valid user home directory."
-fi
-
-# ── Prerequisites ─────────────────────────────────────────────────────────────
-
-command -v node >/dev/null 2>&1 || \
-  fatal "Node.js not found. Install from https://nodejs.org"
-
-command -v npm >/dev/null 2>&1 || \
-  fatal "npm not found. Install Node.js from https://nodejs.org"
-
-command -v git >/dev/null 2>&1 || \
-  fatal "git not found. Install git and retry."
-
-NODE_FULL=$(node -e "process.stdout.write(process.version.slice(1))")
-NODE_MAJOR=$(node -e "process.stdout.write(String(process.versions.node.split('.')[0]))")
-
-if [ "${NODE_MAJOR}" -lt 18 ]; then
-  fatal "Node.js 18+ required (found v${NODE_FULL}). Upgrade at https://nodejs.org"
-fi
-
-step "Node.js v${NODE_FULL}"
-
-if [ "${NODE_MAJOR}" -lt 22 ]; then
-  warn "Node.js 22.5+ unlocks graph features (CodeGraph integration, blast-radius)."
-  warn "Core features work fine on v${NODE_FULL}."
-fi
-
-GIT_VERSION=$(git --version | cut -d' ' -f3)
-step "git ${GIT_VERSION}"
+info "Operating system : $(uname -s)"
+info "Architecture     : $(uname -m)"
+info "Shell            : ${SHELL:-unknown}"
+info "User             : $(id -un)"
+info "Home             : ${HOME}"
+info "Install          : ${INSTALL_DIR}"
+info "Binary directory : ${BIN_DIR}"
 
 echo ""
 
-# ── Clone or update ───────────────────────────────────────────────────────────
+# ==============================================================================
+# Validate HOME
+# ==============================================================================
 
-if [ -d "${INSTALL_DIR}/.git" ]; then
-  EXISTING=$(git -C "${INSTALL_DIR}" rev-parse --short HEAD 2>/dev/null || echo "unknown")
+title "Checking user environment"
 
-  step "Updating existing install in ${INSTALL_DIR} (was ${EXISTING})"
+[[ -n "${HOME:-}" ]] || die "\$HOME is not set."
 
-  git -C "${INSTALL_DIR}" remote set-url origin "${REPO}" 2>/dev/null || true
-  git -C "${INSTALL_DIR}" fetch origin main --quiet
-  git -C "${INSTALL_DIR}" reset --hard origin/main --quiet
+[[ "${HOME}" != "/" ]] || die "HOME=/ is not a valid user home directory."
 
-  NEW=$(git -C "${INSTALL_DIR}" rev-parse --short HEAD)
+mkdir -p "${HOME}" || die "Cannot access home directory: ${HOME}"
 
-  if [ "${EXISTING}" = "${NEW}" ]; then
-    info "Already up to date (${NEW})"
-  else
-    info "Updated ${EXISTING} → ${NEW}"
-  fi
+success "User home directory is available"
+
+# ==============================================================================
+# Dependencies
+# ==============================================================================
+
+title "Checking prerequisites"
+
+check_command() {
+    local command_name="$1"
+    local description="$2"
+
+    if command -v "${command_name}" >/dev/null 2>&1; then
+        success "${description}: $(command -v "${command_name}")"
+    else
+        error "${description} not found"
+        die "Please install ${description} and run the installer again."
+    fi
+}
+
+check_command node "Node.js"
+check_command npm "npm"
+check_command git "git"
+
+NODE_VERSION="$(node --version)"
+NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
+
+success "Node.js version: ${NODE_VERSION}"
+
+if (( NODE_MAJOR < 18 )); then
+    die "Node.js 18 or newer is required. Found ${NODE_VERSION}."
+fi
+
+if (( NODE_MAJOR < 22 )); then
+    warn "Node.js 22.5+ enables additional graph features."
+    detail "Core SynDocs functionality works with ${NODE_VERSION}."
 else
-  # Refuse to overwrite an unrelated directory.
-  if [ -e "${INSTALL_DIR}" ]; then
-    fatal "${INSTALL_DIR} already exists and is not a SynDocs git repository."
-  fi
+    success "Node.js version is suitable for all SynDocs features"
+fi
 
-  step "Cloning piedpipr/SynDocs → ${INSTALL_DIR}"
+NPM_VERSION="$(npm --version)"
+GIT_VERSION="$(git --version | awk '{print $3}')"
 
-  mkdir -p "$(dirname "${INSTALL_DIR}")"
+info "npm version : ${NPM_VERSION}"
+info "git version : ${GIT_VERSION}"
 
-  git clone --depth=1 "${REPO}" "${INSTALL_DIR}" --quiet
+# ==============================================================================
+# Existing installation
+# ==============================================================================
 
-  COMMIT=$(git -C "${INSTALL_DIR}" rev-parse --short HEAD)
-  info "Cloned at ${COMMIT}"
+title "Preparing installation"
+
+if [[ -e "${INSTALL_DIR}" && ! -d "${INSTALL_DIR}/.git" ]]; then
+    die "Installation directory already exists but is not a SynDocs repository:
+
+    ${INSTALL_DIR}
+
+Move it away or remove it, then run the installer again."
+fi
+
+mkdir -p "$(dirname "${INSTALL_DIR}")"
+mkdir -p "${BIN_DIR}"
+
+success "Installation directories are ready"
+
+# ==============================================================================
+# Clone / Update
+# ==============================================================================
+
+title "Downloading SynDocs"
+
+if [[ -d "${INSTALL_DIR}/.git" ]]; then
+
+    info "Existing SynDocs installation detected"
+    detail "Location: ${INSTALL_DIR}"
+
+    OLD_COMMIT="$(git -C "${INSTALL_DIR}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+
+    info "Fetching latest version..."
+
+    git -C "${INSTALL_DIR}" remote set-url origin "${REPO}"
+    git -C "${INSTALL_DIR}" fetch origin main
+
+    info "Updating working tree..."
+
+    git -C "${INSTALL_DIR}" reset --hard origin/main
+
+    NEW_COMMIT="$(git -C "${INSTALL_DIR}" rev-parse --short HEAD)"
+
+    if [[ "${OLD_COMMIT}" == "${NEW_COMMIT}" ]]; then
+        success "Already up to date (${NEW_COMMIT})"
+    else
+        success "Updated ${OLD_COMMIT} → ${NEW_COMMIT}"
+    fi
+
+else
+
+    info "Cloning repository:"
+    detail "${REPO}"
+    echo ""
+
+    git clone --depth=1 "${REPO}" "${INSTALL_DIR}"
+
+    COMMIT="$(git -C "${INSTALL_DIR}" rev-parse --short HEAD)"
+
+    echo ""
+    success "Repository downloaded"
+    detail "Commit: ${COMMIT}"
 fi
 
 cd "${INSTALL_DIR}"
 
-# ── Install dependencies ──────────────────────────────────────────────────────
+# ==============================================================================
+# Verify repository
+# ==============================================================================
 
-step "Installing dependencies"
+title "Verifying SynDocs source"
 
-npm install --silent 2>/dev/null || npm install
+[[ -f "package.json" ]] || die "package.json was not found."
+[[ -d "packages/core" ]] || die "packages/core was not found."
+[[ -d "packages/graph" ]] || die "packages/graph was not found."
+[[ -d "packages/cli" ]] || die "packages/cli was not found."
 
-# ── Build packages in dependency order ───────────────────────────────────────
+success "Repository structure looks valid"
 
-step "Building @syndocs/core"
+# ==============================================================================
+# Dependencies
+# ==============================================================================
+
+title "Installing dependencies"
+
+info "Running npm install"
+detail "This may take a moment on the first installation."
+echo ""
+
+npm install
+
+echo ""
+success "Dependencies installed"
+
+# ==============================================================================
+# Build core
+# ==============================================================================
+
+title "Building @syndocs/core"
+
 (
-  cd packages/core
-  npx tsc --noEmitOnError 2>&1
-) || fatal "core build failed — see above"
+    cd packages/core
+    npm exec tsc -- --noEmitOnError
+)
 
-step "Building @syndocs/graph"
+success "@syndocs/core built successfully"
+
+# ==============================================================================
+# Build graph
+# ==============================================================================
+
+title "Building @syndocs/graph"
+
 (
-  cd packages/graph
-  npx tsc --noEmitOnError 2>&1
-) || fatal "graph build failed — see above"
+    cd packages/graph
+    npm exec tsc -- --noEmitOnError
+)
 
-step "Building syndocs CLI"
+success "@syndocs/graph built successfully"
+
+# ==============================================================================
+# Build CLI
+# ==============================================================================
+
+title "Building syndocs CLI"
+
 (
-  cd packages/cli
-  npx tsc --noEmitOnError 2>&1
-) || fatal "cli build failed — see above"
+    cd packages/cli
+    npm exec tsc -- --noEmitOnError
+)
 
-chmod +x packages/cli/dist/index.js
+CLI_ENTRY="${INSTALL_DIR}/packages/cli/dist/index.js"
 
-# ── Install CLI into the current user's bin ───────────────────────────────────
+[[ -f "${CLI_ENTRY}" ]] || die "CLI build completed but ${CLI_ENTRY} was not created."
 
-step "Installing syndocs for current user"
+chmod +x "${CLI_ENTRY}"
 
-mkdir -p "${BIN_DIR}"
+success "syndocs CLI built successfully"
 
-# Remove an old symlink/file if it points to a previous installation.
-rm -f "${BIN_DIR}/syndocs"
+# ==============================================================================
+# Install executable
+# ==============================================================================
 
-ln -s "${INSTALL_DIR}/packages/cli/dist/index.js" "${BIN_DIR}/syndocs"
+title "Installing command"
 
-# ── PATH setup ─────────────────────────────────────────────────────────────────
+SYNDOCS_BIN="${BIN_DIR}/syndocs"
 
-PATH_UPDATED=0
+rm -f "${SYNDOCS_BIN}"
+
+ln -s "${CLI_ENTRY}" "${SYNDOCS_BIN}"
+
+[[ -x "${SYNDOCS_BIN}" ]] || die "Could not create executable: ${SYNDOCS_BIN}"
+
+success "Created user-local command"
+detail "${SYNDOCS_BIN}"
+
+# ==============================================================================
+# PATH
+# ==============================================================================
+
+title "Configuring PATH"
+
+PATH_NEEDS_UPDATE=0
 
 case ":${PATH}:" in
-  *":${BIN_DIR}:"*)
-    ;;
-  *)
-    PATH_UPDATED=1
-    ;;
+    *":${BIN_DIR}:"*)
+        success "${BIN_DIR} is already on PATH"
+        ;;
+    *)
+        PATH_NEEDS_UPDATE=1
+        warn "${BIN_DIR} is not currently on PATH"
+        ;;
 esac
 
-# Determine the user's shell config file.
-SHELL_RC=""
+SHELL_NAME="$(basename "${SHELL:-bash}")"
 
-case "${SHELL:-}" in
-  */zsh)
-    SHELL_RC="${HOME}/.zshrc"
-    ;;
-  */fish)
-    SHELL_RC="${HOME}/.config/fish/config.fish"
-    ;;
-  */bash)
-    if [ -f "${HOME}/.bashrc" ]; then
-      SHELL_RC="${HOME}/.bashrc"
-    elif [ -f "${HOME}/.bash_profile" ]; then
-      SHELL_RC="${HOME}/.bash_profile"
+case "${SHELL_NAME}" in
+
+    zsh)
+        SHELL_RC="${HOME}/.zshrc"
+        PATH_LINE='export PATH="$HOME/.local/bin:$PATH"'
+        ;;
+
+    bash)
+        if [[ -f "${HOME}/.bashrc" ]]; then
+            SHELL_RC="${HOME}/.bashrc"
+        else
+            SHELL_RC="${HOME}/.bash_profile"
+        fi
+        PATH_LINE='export PATH="$HOME/.local/bin:$PATH"'
+        ;;
+
+    fish)
+        SHELL_RC="${HOME}/.config/fish/config.fish"
+        PATH_LINE='fish_add_path "$HOME/.local/bin"'
+        ;;
+
+    *)
+        SHELL_RC=""
+        PATH_LINE='export PATH="$HOME/.local/bin:$PATH"'
+        ;;
+esac
+
+if (( PATH_NEEDS_UPDATE == 1 )); then
+
+    if [[ -n "${SHELL_RC}" ]]; then
+
+        mkdir -p "$(dirname "${SHELL_RC}")"
+        touch "${SHELL_RC}"
+
+        if ! grep -Fq "${PATH_LINE}" "${SHELL_RC}" 2>/dev/null; then
+
+            {
+                echo ""
+                echo "# SynDocs"
+                echo "${PATH_LINE}"
+            } >> "${SHELL_RC}"
+
+            success "Added ~/.local/bin to ${SHELL_RC}"
+        else
+            success "PATH configuration already exists in ${SHELL_RC}"
+        fi
+
     else
-      SHELL_RC="${HOME}/.bashrc"
-    fi
-    ;;
-esac
 
-# Add ~/.local/bin to the user's shell config if necessary.
-if [ "${PATH_UPDATED}" -eq 1 ] && [ -n "${SHELL_RC}" ]; then
-
-  mkdir -p "$(dirname "${SHELL_RC}")"
-
-  if [ "${SHELL##*/}" = "fish" ]; then
-    if ! grep -Fq 'fish_add_path "$HOME/.local/bin"' "${SHELL_RC}" 2>/dev/null; then
-      {
-        echo ""
-        echo "# SynDocs"
-        echo 'fish_add_path "$HOME/.local/bin"'
-      } >> "${SHELL_RC}"
+        warn "Could not automatically determine your shell configuration."
+        detail "Add ~/.local/bin to PATH manually."
     fi
-  else
-    if ! grep -Fq 'export PATH="$HOME/.local/bin:$PATH"' "${SHELL_RC}" 2>/dev/null; then
-      {
-        echo ""
-        echo "# SynDocs"
-        echo 'export PATH="$HOME/.local/bin:$PATH"'
-      } >> "${SHELL_RC}"
-    fi
-  fi
 fi
 
-# Make it available immediately in this installer process.
+# Make available immediately.
 export PATH="${BIN_DIR}:${PATH}"
 
-# ── Verify ─────────────────────────────────────────────────────────────────────
+# ==============================================================================
+# Verify command
+# ==============================================================================
+
+title "Verifying installation"
+
+if ! command -v syndocs >/dev/null 2>&1; then
+
+    warn "syndocs is installed but is not visible through PATH yet."
+    echo ""
+
+    info "The executable is here:"
+    detail "${SYNDOCS_BIN}"
+    echo ""
+
+    if [[ -n "${SHELL_RC}" ]]; then
+        info "Restart your shell or run:"
+        echo ""
+        printf '    %bsource %s%b\n' "${CYAN}" "${SHELL_RC}" "${RESET}"
+        echo ""
+    fi
+
+else
+
+    success "syndocs command is available"
+
+    if SYNDOCS_VERSION="$(syndocs --version 2>/dev/null)"; then
+        success "Version: ${SYNDOCS_VERSION}"
+    fi
+
+    info "Command:"
+    detail "$(command -v syndocs)"
+fi
+
+# ==============================================================================
+# Optional CodeGraph
+# ==============================================================================
 
 echo ""
 
-if command -v syndocs >/dev/null 2>&1; then
-  VERSION=$(syndocs --version 2>/dev/null || echo "v0.2.0")
-
-  echo -e "  ${GREEN}${BOLD}✓ syndocs ${VERSION} installed${RESET}"
-  echo ""
-  echo -e "  ${BOLD}Install location:${RESET} ${INSTALL_DIR}"
-  echo -e "  ${BOLD}Command:${RESET}         ${BIN_DIR}/syndocs"
-  echo ""
-
-  if [ "${PATH_UPDATED}" -eq 1 ]; then
-    echo -e "  ${YELLOW}Restart your shell or run:${RESET}"
-    echo ""
-
-    if [ -n "${SHELL_RC}" ]; then
-      echo -e "    ${CYAN}source ${SHELL_RC}${RESET}"
-    else
-      echo -e "    ${CYAN}export PATH=\"${BIN_DIR}:\$PATH\"${RESET}"
-    fi
-
-    echo ""
-  fi
-
-  echo -e "  ${BOLD}Get started:${RESET}"
-  echo ""
-  echo -e "    ${CYAN}cd your-project${RESET}"
-  echo -e "    ${CYAN}syndocs init${RESET}         ← mark files, create mirror docs"
-  echo -e "    ${CYAN}syndocs check${RESET}        ← detect drift"
-  echo -e "    ${CYAN}syndocs serve${RESET}        ← web UI at http://localhost:4748"
-  echo ""
-  echo -e "  ${DIM}Full docs: https://github.com/piedpipr/SynDocs#readme${RESET}"
-  echo ""
+if command -v codegraph >/dev/null 2>&1; then
+    success "CodeGraph detected"
 else
-  echo -e "  ${GREEN}${BOLD}✓ syndocs installed${RESET}"
-  echo ""
-  echo -e "  Run it directly with:"
-  echo -e "    ${CYAN}${BIN_DIR}/syndocs init${RESET}"
-  echo ""
-  warn "Could not verify syndocs on PATH."
+    warn "CodeGraph is not installed"
+    detail "Optional: graph, wiki-link and blast-radius features may use CodeGraph."
+    echo ""
+    detail "Install with:"
+    printf '    %bnpm install -g @colbymchenry/codegraph%b\n' "${CYAN}" "${RESET}"
 fi
 
-# ── Optional: CodeGraph prompt ────────────────────────────────────────────────
+# ==============================================================================
+# Final summary
+# ==============================================================================
 
-if ! command -v codegraph >/dev/null 2>&1; then
-  echo -e "  ${DIM}Graph features (wiki-links, blast-radius) need CodeGraph:${RESET}"
-  echo -e "    ${DIM}npm install -g @colbymchenry/codegraph${RESET}"
-  echo ""
+echo ""
+printf '%b\n' "${GREEN}${BOLD}"
+echo "  ╔══════════════════════════════════════════════════════════════════╗"
+echo "  ║                                                                  ║"
+echo "  ║              ✓ SynDocs installed successfully                   ║"
+echo "  ║                                                                  ║"
+echo "  ╚══════════════════════════════════════════════════════════════════╝"
+printf '%b\n' "${RESET}"
+
+echo ""
+printf '  %bInstallation:%b %s\n' "${BOLD}" "${RESET}" "${INSTALL_DIR}"
+printf '  %bCommand:%b      %s\n' "${BOLD}" "${RESET}" "${SYNDOCS_BIN}"
+printf '  %bNode.js:%b      %s\n' "${BOLD}" "${RESET}" "${NODE_VERSION}"
+
+echo ""
+printf '%bGet started%b\n' "${BOLD}" "${RESET}"
+line
+
+printf '  %b1.%b Go to your project:\n' "${CYAN}" "${RESET}"
+printf '     %bcd your-project%b\n' "${CYAN}" "${RESET}"
+
+printf '  %b2.%b Initialize SynDocs:\n' "${CYAN}" "${RESET}"
+printf '     %bsyndocs init%b\n' "${CYAN}" "${RESET}"
+
+printf '  %b3.%b Check documentation drift:\n' "${CYAN}" "${RESET}"
+printf '     %bsyndocs check%b\n' "${CYAN}" "${RESET}"
+
+printf '  %b4.%b Start the web UI:\n' "${CYAN}" "${RESET}"
+printf '     %bsyndocs serve%b\n' "${CYAN}" "${RESET}"
+
+echo ""
+printf '  %bWeb UI:%b http://localhost:4748\n' "${BOLD}" "${RESET}"
+printf '  %bDocs:%b   https://github.com/piedpipr/SynDocs#readme\n' "${BOLD}" "${RESET}"
+
+if (( PATH_NEEDS_UPDATE == 1 )) && [[ -n "${SHELL_RC}" ]]; then
+    echo ""
+    printf '%bOne final step:%b\n' "${YELLOW}${BOLD}" "${RESET}"
+    printf '  Run:\n\n'
+    printf '    %bsource %s%b\n' "${CYAN}" "${SHELL_RC}" "${RESET}"
+    echo ""
 fi
+
+echo ""
+printf '%bHappy documenting! 🚀%b\n' "${BOLD}" "${RESET}"
+echo ""
 ```
