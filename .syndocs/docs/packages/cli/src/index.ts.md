@@ -1,5 +1,5 @@
 # index.ts
-<!-- syndocs-hash: a756c9ae524a -->
+<!-- syndocs-hash: 87ae2255a1e2 -->
 
 ```ts
 #!/usr/bin/env -S node --no-warnings=ExperimentalWarning
@@ -15,6 +15,7 @@ import { runTree }       from './commands/tree';
 import { runLintEmbeds } from './commands/lint-embeds';
 import { runGraphLink }  from './commands/graph-link';
 import { runServe }      from './commands/serve';
+import { runAuth }       from './commands/auth';
 
 const VERSION = '0.2.0';
 
@@ -23,8 +24,9 @@ ${c.bold('SynDocs')} v${VERSION} — code-synced documentation with graph connec
 
 ${c.bold('Usage:')}
 
-  syndocs init [--dry-run] [--skip-codegraph]
+  syndocs init [access-code] [--access-code <code>] [--dry-run] [--skip-codegraph]
     One-time initialization for a repository.
+    Prompts for web UI edit access code (or pass directly).
     Creates .syndocs/ structure (docs, microdocs, guides) and initial documentation.
     Runs codegraph init automatically if CodeGraph is installed.
 
@@ -51,6 +53,9 @@ ${c.bold('Usage:')}
   syndocs serve [--port <n>]
     Start the web UI at http://localhost:4748
     Force-directed graph, rendered markdown, live reload, drift badges.
+
+  syndocs auth [code]
+    Set or update the Web UI edit access code.
 
   syndocs lint-embeds
     Validate @syndocs-embed references in .syndocs/guides/.
@@ -104,6 +109,7 @@ async function main(): Promise<void> {
         config,
         dryRun: parsed.flags.dryRun,
         skipCodegraph: parsed.flags.skipCodegraph,
+        accessCode: parsed.flags.accessCode || (parsed.targets.length > 0 ? parsed.targets[0] : undefined),
       });
       break;
     }
@@ -170,6 +176,14 @@ async function main(): Promise<void> {
         cwd,
         config,
         port: parsed.flags.port,
+      });
+      break;
+    }
+
+    case 'auth': {
+      await runAuth({
+        cwd,
+        code: targets[0],
       });
       break;
     }

@@ -1,5 +1,5 @@
 # adapter.ts
-<!-- syndocs-hash: ccdc8e72ea32 -->
+<!-- syndocs-hash: 30bbd5213f42 -->
 
 ```ts
 // @syndocs
@@ -21,15 +21,26 @@ import path from 'path';
 // ─── Public types ─────────────────────────────────────────────────────────────
 
 export interface GraphEdge {
-  /** Edge kind as stored in CodeGraph: 'calls' | 'imports' | 'extends' | 'implements' */
+  /** Edge kind as stored in CodeGraph: 'calls' | 'imports' | 'extends' | 'implements' | 'references' */
   kind: string;
   /** 0-based source line of this edge in the source file */
   sourceLine: number;
+  /** Repo-root-relative path of the source file */
+  sourceFile?: string;
   /** Name of the source symbol (function, class, …) */
   sourceSymbol: string;
   /** Repo-root-relative path of the target file */
   targetFile: string;
   /** Name of the target symbol, if known */
+  targetSymbol: string | null;
+}
+
+export interface CodeTokenEdge {
+  line: number;
+  col: number;
+  name: string;
+  kind: string;
+  targetFile: string;
   targetSymbol: string | null;
 }
 
@@ -90,6 +101,76 @@ export class CodeGraphAdapter {
         kind:         r.kind,
         sourceLine:   Number(r.source_line),
         sourceSymbol: String(r.source_symbol),
+        targetFile:   String(r.target_file),
+        targetSymbol: r.target_symbol != null ? String(r.target_symbol) : null,
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * All structural cross-file edges across the entire repository.
+   */
+  getAllEdges(): GraphEdge[] {
+    try {
+      const stmt = this.db.prepare(`
+        SELECT
+          e.kind,
+          COALESCE(e.line, 0) AS source_line,
+          sn.file_path        AS source_file,
+          sn.name             AS source_symbol,
+          tn.file_path        AS target_file,
+          tn.name             AS target_symbol
+        FROM edges e
+        JOIN nodes sn ON e.source = sn.id
+        JOIN nodes tn ON e.target = tn.id
+        WHERE sn.file_path != tn.file_path
+          AND e.kind IN ('calls','imports','extends','implements','references')
+        ORDER BY sn.file_path, e.line
+      `);
+      return (stmt.all() as any[]).map(r => ({
+        kind:         String(r.kind),
+        sourceLine:   Number(r.source_line),
+        sourceFile:   String(r.source_file),
+        sourceSymbol: String(r.source_symbol),
+        targetFile:   String(r.target_file),
+        targetSymbol: r.target_symbol != null ? String(r.target_symbol) : null,
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Precise AST outbound references for symbols/keywords in a specific source file.
+   * Drives in-code token anchors and link thread lines.
+   */
+  getFileTokens(absOrRelPath: string): CodeTokenEdge[] {
+    const rel = this._toRel(absOrRelPath);
+    try {
+      const stmt = this.db.prepare(`
+        SELECT
+          COALESCE(e.line, 0) AS line,
+          COALESCE(e.col, 0)  AS col,
+          tn.name             AS name,
+          e.kind              AS kind,
+          tn.file_path        AS target_file,
+          tn.name             AS target_symbol
+        FROM edges e
+        JOIN nodes sn ON e.source = sn.id
+        JOIN nodes tn ON e.target = tn.id
+        WHERE sn.file_path = ?
+          AND tn.file_path != ?
+          AND e.kind IN ('calls', 'imports', 'extends', 'implements', 'references')
+          AND e.line IS NOT NULL
+        ORDER BY e.line ASC, e.col ASC
+      `);
+      return (stmt.all(rel, rel) as any[]).map(r => ({
+        line:         Number(r.line),
+        col:          Number(r.col),
+        name:         String(r.name),
+        kind:         String(r.kind),
         targetFile:   String(r.target_file),
         targetSymbol: r.target_symbol != null ? String(r.target_symbol) : null,
       }));
