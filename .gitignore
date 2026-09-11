@@ -18,6 +18,8 @@ packages/*/dist/
 *.log
 npm-debug.log*
 
-# Environment
+# Environment & Secrets
 .env
 .env.local
+.syndocs/auth.json
+scratch/
