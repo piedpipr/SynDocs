@@ -80,10 +80,11 @@ export async function runServe(opts: ServeOptions): Promise<void> {
     }
   }
 
-  // File watcher — reload data and notify clients on any change in syndocs/
-  const docsAbs = path.join(cwd, config.docsRoot);
-  if (fs.existsSync(docsAbs)) {
-    fs.watch(docsAbs, { recursive: true }, (_, filename) => {
+  // File watcher — reload data and notify clients on any change in .syndocs/
+  const syndocsDir = path.join(cwd, '.syndocs');
+  const watchDir = fs.existsSync(syndocsDir) ? syndocsDir : path.join(cwd, config.docsRoot);
+  if (fs.existsSync(watchDir)) {
+    fs.watch(watchDir, { recursive: true }, (_, filename) => {
       if (!filename || !filename.endsWith('.md')) return;
       buildData(cwd, config).then(d => {
         data = d;
