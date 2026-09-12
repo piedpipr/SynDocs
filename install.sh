@@ -1,34 +1,45 @@
 #!/usr/bin/env bash
 
 # ==============================================================================
-# SynDocs Installer & Manager
+# SynDocs Local Installer
 # ==============================================================================
 #
-# One-line install:
+# Builds and installs SynDocs from the directory containing this script.
+# Run this after cloning or checking out the repository on any branch:
 #
-#   bash <(curl -fsSL https://raw.githubusercontent.com/piedpipr/SynDocs/main/install.sh)
+#   git clone https://github.com/piedpipr/SynDocs.git
+#   cd SynDocs
+#   ./install.sh
+#
+# This script is also called automatically by quickinstall.sh after it
+# clones the repository — you do not need to invoke it manually in that case.
 #
 # Commands:
 #
-#   ./install.sh install      # Install or update SynDocs (default)
-#   ./install.sh reinstall    # Clean reinstall from scratch
-#   ./install.sh update       # Update existing installation to latest main
-#   ./install.sh uninstall    # Remove binary symlink and installation dir
+#   ./install.sh install      # Build and link SynDocs (default)
+#   ./install.sh reinstall    # Clean rebuild — wipes dist dirs and rebuilds
+#   ./install.sh uninstall    # Remove the binary symlink only
 #
-# Environment:
+# Options:
 #
-#   SYNDOCS_DIR=/custom/path  # Defaults to ~/.syndocs
+#   -y, --yes                 # Skip interactive confirmation prompts
+#
+# Note:
+#   "update" is intentionally not supported here. To update a local
+#   checkout run: git pull && ./install.sh install
 #
 # ==============================================================================
 
 set -Eeuo pipefail
 
-REPO="https://github.com/piedpipr/SynDocs.git"
-INSTALL_DIR="${SYNDOCS_DIR:-${HOME}/.syndocs}"
+# Directory containing this script = the repo root we build from
+INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 BIN_DIR="${HOME}/.local/bin"
 SYNDOCS_BIN="${BIN_DIR}/syndocs"
 
 VERSION="0.2.0"
+PATH_NEEDS_UPDATE=0   # set by configure_path, read by do_install
 
 # ==============================================================================
 # Argument parsing
@@ -39,7 +50,7 @@ AUTO_YES="n"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        install|reinstall|update|uninstall)
+        install|reinstall|uninstall)
             ACTION="$1"
             shift
             ;;
@@ -48,32 +59,32 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         -h|--help|help)
-            echo "SynDocs Installer & Manager (v${VERSION})"
+            echo "SynDocs Local Installer (v${VERSION})"
             echo ""
             echo "Usage:"
             echo "  install.sh [command] [options]"
             echo ""
             echo "Commands:"
-            echo "  install      Install SynDocs (default if omitted)"
-            echo "  reinstall    Clean reinstall (removes previous install and rebuilds)"
-            echo "  update       Update existing installation from git and rebuild"
-            echo "  uninstall    Remove SynDocs binary and installation directory"
+            echo "  install      Build and install SynDocs from this directory (default)"
+            echo "  reinstall    Clean rebuild — removes dist dirs then rebuilds"
+            echo "  uninstall    Remove the SynDocs binary symlink"
             echo ""
             echo "Options:"
             echo "  -y, --yes    Skip interactive confirmation prompts"
             echo "  -h, --help   Show this help message"
             echo ""
+            echo "To update: git pull && ./install.sh install"
+            echo ""
             exit 0
             ;;
         *)
-            # Ignore unknown options or treat as extra args
             shift
             ;;
     esac
 done
 
 # ==============================================================================
-# Terminal
+# Terminal colours
 # ==============================================================================
 
 if [[ -t 1 ]]; then
@@ -167,9 +178,13 @@ trap 'on_error $LINENO' ERR
 
 # ==============================================================================
 # Banner
+# Set SYNDOCS_NO_BANNER=1 to suppress (used by quickinstall.sh to avoid
+# printing the banner twice).
 # ==============================================================================
 
 print_banner() {
+    [[ "${SYNDOCS_NO_BANNER:-0}" == "1" ]] && return
+
     echo ""
     printf '%b\n' "${CYAN}${BOLD}"
     echo "   ███████╗██╗   ██╗███╗   ██╗██████╗  ██████╗  ██████╗███████╗"
@@ -256,60 +271,6 @@ check_prerequisites() {
 }
 
 # ==============================================================================
-# Prepare directories & clone/update repo
-# ==============================================================================
-
-prepare_and_download() {
-    title "Preparing installation"
-
-    if [[ -e "${INSTALL_DIR}" && ! -d "${INSTALL_DIR}/.git" ]]; then
-        die "Installation directory already exists but is not a SynDocs repository:
-
-    ${INSTALL_DIR}
-
-Move it away or remove it, then run the installer again."
-    fi
-
-    mkdir -p "$(dirname "${INSTALL_DIR}")"
-    mkdir -p "${BIN_DIR}"
-
-    success "Installation directories are ready"
-
-    title "Downloading SynDocs"
-
-    if [[ -d "${INSTALL_DIR}/.git" ]]; then
-        info "Existing SynDocs installation detected"
-        detail "Location: ${INSTALL_DIR}"
-
-        OLD_COMMIT="$(git -C "${INSTALL_DIR}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
-
-        info "Fetching latest version..."
-        git -C "${INSTALL_DIR}" remote set-url origin "${REPO}" 2>/dev/null || git -C "${INSTALL_DIR}" remote add origin "${REPO}"
-        git -C "${INSTALL_DIR}" fetch origin main
-        git -C "${INSTALL_DIR}" reset --hard origin/main
-
-        NEW_COMMIT="$(git -C "${INSTALL_DIR}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
-
-        if [[ "${OLD_COMMIT}" == "${NEW_COMMIT}" ]]; then
-            success "Already up to date (${NEW_COMMIT})"
-        else
-            success "Updated ${OLD_COMMIT} → ${NEW_COMMIT}"
-        fi
-    else
-        info "Cloning repository:"
-        detail "${REPO}"
-        echo ""
-
-        git clone --depth=1 "${REPO}" "${INSTALL_DIR}"
-
-        COMMIT="$(git -C "${INSTALL_DIR}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
-        echo ""
-        success "Repository downloaded"
-        detail "Commit: ${COMMIT}"
-    fi
-}
-
-# ==============================================================================
 # Build & link packages
 # ==============================================================================
 
@@ -362,6 +323,7 @@ build_and_link() {
     success "syndocs CLI built successfully"
 
     title "Installing command executable"
+    mkdir -p "${BIN_DIR}"
     rm -f "${SYNDOCS_BIN}"
     ln -s "${CLI_ENTRY}" "${SYNDOCS_BIN}"
 
@@ -441,7 +403,7 @@ configure_path() {
 }
 
 # ==============================================================================
-# Verify Command
+# Verify installation
 # ==============================================================================
 
 verify_installation() {
@@ -524,7 +486,8 @@ do_uninstall() {
 
     local removed_anything=0
 
-    # 1. Remove binary symlink
+    # Remove binary symlink only — in a local checkout the source directory
+    # belongs to the user, so we never touch it here.
     if [[ -e "${SYNDOCS_BIN}" || -L "${SYNDOCS_BIN}" ]]; then
         info "Removing binary symlink: ${SYNDOCS_BIN}"
         rm -f "${SYNDOCS_BIN}"
@@ -532,33 +495,6 @@ do_uninstall() {
         removed_anything=1
     else
         detail "No binary symlink found at ${SYNDOCS_BIN}"
-    fi
-
-    # 2. Remove installation directory
-    if [[ -d "${INSTALL_DIR}" ]]; then
-        if [[ "${AUTO_YES}" != "y" && -t 0 ]]; then
-            echo ""
-            printf '  %bAre you sure you want to remove the installation directory?%b\n' "${BOLD}${YELLOW}" "${RESET}"
-            detail "Location: ${INSTALL_DIR}"
-            printf '  %bProceed? [y/N]: %b' "${BOLD}${YELLOW}" "${RESET}"
-            read -r reply || reply=""
-            case "$reply" in
-                [yY][eE][sS]|[yY]) ;;
-                *)
-                    info "Preserved installation directory: ${INSTALL_DIR}"
-                    echo ""
-                    return 0
-                    ;;
-            esac
-        fi
-
-        info "Removing installation directory: ${INSTALL_DIR}"
-        cd "${HOME}"
-        rm -rf "${INSTALL_DIR}"
-        success "Installation directory removed"
-        removed_anything=1
-    else
-        detail "No installation directory found at ${INSTALL_DIR}"
     fi
 
     echo ""
@@ -572,71 +508,28 @@ do_uninstall() {
         echo "  ╚══════════════════════════════════════════════════════════════════╝"
         printf '%b\n' "${RESET}"
     else
-        warn "No SynDocs installation was found to remove."
+        warn "No SynDocs binary symlink was found to remove."
     fi
 
     echo ""
-    detail "Note: If you have PATH configurations in your shell rc files (.bashrc, .zshrc),"
+    detail "Source directory preserved: ${INSTALL_DIR}"
+    detail "If you have PATH configurations in your shell rc files (.bashrc, .zshrc),"
     detail "you may manually remove the line: export PATH=\"\$HOME/.local/bin:\$PATH\""
     echo ""
 }
 
-do_update() {
-    title "Updating SynDocs"
-
-    if [[ ! -d "${INSTALL_DIR}" ]]; then
-        warn "SynDocs installation not found at ${INSTALL_DIR}"
-        info "Switching to full installation..."
-        do_install "install"
-        return
-    fi
-
-    check_environment
-    check_prerequisites
-
-    title "Updating SynDocs repository"
-    OLD_COMMIT="$(git -C "${INSTALL_DIR}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
-
-    info "Fetching latest code from ${REPO}..."
-    git -C "${INSTALL_DIR}" remote set-url origin "${REPO}" 2>/dev/null || git -C "${INSTALL_DIR}" remote add origin "${REPO}"
-    git -C "${INSTALL_DIR}" fetch origin main
-    git -C "${INSTALL_DIR}" reset --hard origin/main
-    NEW_COMMIT="$(git -C "${INSTALL_DIR}" rev-parse --short HEAD 2>/dev/null || echo unknown)"
-
-    if [[ "${OLD_COMMIT}" == "${NEW_COMMIT}" ]]; then
-        success "Already up to date (${NEW_COMMIT})"
-    else
-        success "Updated repository: ${OLD_COMMIT} → ${NEW_COMMIT}"
-    fi
-
-    build_and_link
-    configure_path
-    verify_installation
-
-    echo ""
-    printf '%b\n' "${GREEN}${BOLD}"
-    echo "  ╔══════════════════════════════════════════════════════════════════╗"
-    echo "  ║                                                                  ║"
-    echo "  ║                ✓ SynDocs updated successfully                    ║"
-    echo "  ║                                                                  ║"
-    echo "  ╚══════════════════════════════════════════════════════════════════╝"
-    printf '%b\n' "${RESET}"
-    echo ""
-    printf '  %bInstallation:%b %s\n' "${BOLD}" "${RESET}" "${INSTALL_DIR}"
-    printf '  %bCommand:%b      %s\n' "${BOLD}" "${RESET}" "${SYNDOCS_BIN}"
-    printf '  %bVersion:%b      %s (%s)\n' "${BOLD}" "${RESET}" "${VERSION}" "${NEW_COMMIT}"
-    echo ""
-}
-
 do_reinstall() {
-    title "Reinstalling SynDocs (Clean Reinstall)"
+    title "Reinstalling SynDocs (Clean Build)"
 
-    if [[ -d "${INSTALL_DIR}" ]]; then
-        info "Removing previous installation directory: ${INSTALL_DIR}"
-        cd "${HOME}"
-        rm -rf "${INSTALL_DIR}"
-        success "Previous installation directory removed"
-    fi
+    # Wipe compiled output so we get a guaranteed-clean rebuild.
+    for pkg in core graph cli; do
+        local dist_dir="${INSTALL_DIR}/packages/${pkg}/dist"
+        if [[ -d "${dist_dir}" ]]; then
+            info "Removing packages/${pkg}/dist"
+            rm -rf "${dist_dir}"
+            success "Removed packages/${pkg}/dist"
+        fi
+    done
 
     if [[ -e "${SYNDOCS_BIN}" || -L "${SYNDOCS_BIN}" ]]; then
         info "Removing old binary symlink: ${SYNDOCS_BIN}"
@@ -652,7 +545,6 @@ do_install() {
 
     check_environment
     check_prerequisites
-    prepare_and_download
     build_and_link
     configure_path
     verify_installation
@@ -719,9 +611,6 @@ case "${ACTION}" in
     uninstall)
         do_uninstall
         ;;
-    update)
-        do_update
-        ;;
     reinstall)
         do_reinstall
         ;;
@@ -730,6 +619,6 @@ case "${ACTION}" in
         ;;
     *)
         error "Unknown action: ${ACTION}"
-        die "Supported commands: install, reinstall, update, uninstall"
+        die "Supported commands: install, reinstall, uninstall"
         ;;
 esac
