@@ -17,13 +17,11 @@ import {
 } from '@syndocs/core';
 import {
   SynDocsConfig,
-  GraphAdapter,
   c,
   readFileSafe,
   walkSourceFiles,
   walkMirrorDocs,
   writeFile,
-  loadGraphAdapter,
   matchesTargets,
 } from '../utils';
 
@@ -45,9 +43,6 @@ export async function runUpdate(opts: UpdateOptions): Promise<void> {
   const updateDocs = collection === 'all' || collection === 'docs';
   const updateMicros = collection === 'all' || collection === 'microdocs';
 
-  // Load graph adapter for AST-exact micro-doc boundaries
-  const adapter: GraphAdapter = await loadGraphAdapter(cwd);
-
   let created = 0, updated = 0, alreadyOk = 0, skipped = 0, pruned = 0, orphanedKept = 0;
 
   // ── 1. Update & auto-create from source files ──────────────────────────────
@@ -68,7 +63,7 @@ export async function runUpdate(opts: UpdateOptions): Promise<void> {
       continue;
     }
 
-    const anchors = parseAnchors(content, langConfig, { graphAdapter: adapter, filePath: relPath });
+    const anchors = parseAnchors(content, langConfig, { filePath: relPath });
     if (anchors.length === 0) {
       if (targets.length > 0) {
         console.log('  ' + c.dim('skip') + '  ' + relPath + '  ' + c.dim('(no @syndocs marker)'));
@@ -218,7 +213,7 @@ export async function runUpdate(opts: UpdateOptions): Promise<void> {
           const sourceContent = readFileSafe(sourceAbs);
           const langConfig = getLangConfig(sourceRel);
           if (sourceContent && langConfig) {
-            const anchors = parseAnchors(sourceContent, langConfig, { graphAdapter: adapter, filePath: sourceRel });
+            const anchors = parseAnchors(sourceContent, langConfig, { filePath: sourceRel });
             if (!anchors.some(a => a.kind === 'whole-file')) {
               const mirrorDoc = parseMirrorDoc(readFileSafe(mirrorAbs)!);
               if (mirrorDoc.sections.some(s => s.kind === 'whole-file')) {
@@ -242,8 +237,6 @@ export async function runUpdate(opts: UpdateOptions): Promise<void> {
       } catch { /* skip malformed */ }
     }
   }
-
-  adapter?.close();
 
   console.log('');
   const msgs = [

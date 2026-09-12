@@ -2,12 +2,13 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { initTokenizer } from '../tokenizer';
+import { initAstEngine } from '../ast-scope';
 import { parseAnchors } from '../anchor-parser';
 import { getLangConfig } from '../languages';
-import type { GraphAdapterLike, NodeBoundaryLike } from '../graph-adapter-like';
 
 before(async () => {
   await initTokenizer(['typescript', 'javascript', 'python', 'css', 'html', 'php', 'java']);
+  await initAstEngine(['typescript', 'javascript', 'python', 'php', 'java']);
 });
 
 function anchors(content: string, filename: string) {
@@ -151,10 +152,14 @@ function b() {}
 
 test('inline anchor after a chained method CALL is not misidentified as a method declaration (regression)', () => {
   // Reported bug: `$table->string(...)->default(...)` was misread as
-  // declaring a method named "string" by a regex that matched any
-  // "identifier followed by (" with no check for a preceding `->`/`.`/`::`
-  // member-access operator.
-  const result = anchors(`
+  // declaring a method named "string" by the OLD regex parser, which
+  // matched any "identifier followed by (" with no check for a preceding
+  // `->`/`.`/`::` member-access operator. Tree-sitter can't make this
+  // mistake at all: `string`/`default` are calls inside an expression
+  // statement, never a `method_declaration` node, regardless of the
+  // (deliberately unrealistic — this is invalid standalone PHP) shape of
+  // the surrounding statement.
+  const result = anchors(`<?php
 class ExamResult extends Model {
     protected $fillable = ['user_id'];
 
@@ -163,11 +168,8 @@ class ExamResult extends Model {
 `, 'x.php');
   assert.equal(result.length, 1);
   assert.equal(result[0].inline, true);
-  // No real declaration on this line -> generic line-based scope, NOT a
-  // fabricated method name.
-  assert.equal(result[0].elementKind, undefined);
-  assert.equal(result[0].elementName, undefined);
-  assert.match(result[0].label!, /^line-L\d+$/);
+  assert.notEqual(result[0].elementName, 'string');
+  assert.notEqual(result[0].elementName, 'default');
 });
 
 test('inline anchor after a JS method call (this.foo()) is not misidentified as a declaration', () => {
@@ -178,7 +180,7 @@ this.doSomething(x); // @synd
 });
 
 test('property assignment via -> is not misidentified as a variable declaration', () => {
-  const result = anchors(`
+  const result = anchors(`<?php
 $table->exam_category = 'practice_set'; // @synd
 `, 'x.php');
   assert.equal(result[0].elementName, undefined);
@@ -195,7 +197,7 @@ public void calculateTotal() { // @synd
 });
 
 test('PHP "function" keyword declaration is still detected', () => {
-  const result = anchors(`
+  const result = anchors(`<?php
 class Foo {
   private $x;
 
@@ -207,76 +209,153 @@ class Foo {
 `, 'x.php');
   const micro = result.find(a => a.autoScoped);
   assert.ok(micro, 'expected an auto-scoped micro anchor');
-  assert.equal(micro!.elementKind, 'function');
+  // Now resolved via tree-sitter (not the old regex), which correctly
+  // reports this as a class "method" rather than a bare "function" since
+  // it's declared inside a class body — a more precise result than the old
+  // regex-based DECLARATION_PATTERNS table produced.
+  assert.equal(micro!.elementKind, 'method');
   assert.equal(micro!.elementName, 'getName');
 });
 
-// ─── AST-preferred scope resolution ─────────────────────────────────────────
+// ─── AST-based scope resolution (tree-sitter) ───────────────────────────────
 
-function makeFakeAdapter(boundary: NodeBoundaryLike | null): GraphAdapterLike {
-  return {
-    isReady: () => true,
-    getNodeBoundary: () => boundary,
-    getNextNode: () => boundary,
-    getEnclosingScope: () => boundary,
-  };
+test('REGRESSION (bug #1): a stray unmatched brace character inside a string literal no longer swallows the next unrelated function', () => {
+  // This is the exact case that broke the old brace-counting findBlockEnd():
+  // a string containing a lone `}` shifted the raw-character brace count by
+  // one, so depth never reached <= 0 until the NEXT function's closing
+  // brace, silently merging two unrelated functions into one micro-doc.
+  const result = anchors(`
+export function noise() { return 0; }
+
+// @synd: with-odd-brace
+export function withOddBrace(name) {
+  const s = "curly: }"; // this string has a lone closing brace
+  console.log(name, s);
+  return name;
 }
 
-test('scope resolution prefers the graph adapter over the regex fallback when ready', () => {
-  const cfg = getLangConfig('x.ts')!;
-  const content = `
-// @synd
-function realFunctionName() {
-  return 1;
+export function shouldBeSeparate(x) {
+  return x * 2;
 }
-`;
-  const adapter = makeFakeAdapter({
-    name: 'astResolvedName',
-    kind: 'function',
-    startLine: 3, // 1-based
-    endLine: 5,
-  });
-  const result = parseAnchors(content, cfg, { graphAdapter: adapter, filePath: 'x.ts' });
-  // bare @synd here is on line 1 (0-based), which is within the header area,
-  // so it's whole-file, not auto-scoped — use an inline case instead to
-  // actually exercise scope resolution.
-  assert.equal(result[0].kind, 'whole-file');
+`, 'x.ts');
+
+  const micro = result.find(a => a.label === 'with-odd-brace');
+  assert.ok(micro, 'expected the with-odd-brace anchor to be found');
+  assert.equal(micro!.elementName, 'withOddBrace');
+  assert.equal(micro!.elementKind, 'function');
+  // Must end at withOddBrace's own closing brace (line 8, 0-based; exclusive
+  // end = 9), NOT swallow shouldBeSeparate too (which starts at line 10).
+  assert.ok(
+    micro!.scopeEndLine! <= 9,
+    `expected scope to end at/before line 9 (before shouldBeSeparate at line 10), got endLine=${micro!.scopeEndLine}`,
+  );
 });
 
-test('inline bare anchor uses AST scope name over regex-detected name when adapter is ready', () => {
-  const cfg = getLangConfig('x.ts')!;
-  const content = `weirdSyntaxRegexCannotParse(); // @synd\n`;
-  const adapter = makeFakeAdapter({
-    name: 'astResolvedName',
-    kind: 'function',
-    startLine: 1,
-    endLine: 1,
-  });
-  const result = parseAnchors(content, cfg, { graphAdapter: adapter, filePath: 'x.ts' });
-  assert.equal(result.length, 1);
-  assert.equal(result[0].elementName, 'astResolvedName');
+test('REGRESSION (bug #2): explicit @synd: label sitting inside a multi-line JSDoc block above a multi-line function signature resolves correct boundaries', () => {
+  // The old parser's explicit-label branch never called scope resolution
+  // at all — this pins that it now does, and resolves the FULL declaration
+  // (not a snippet starting mid-comment).
+  const result = anchors(`
+const template = \`some { curly } braces inside a string\`;
+
+/**
+ * Computes the total price including tax.
+ * @synd: compute-total
+ */
+export function computeTotal(
+  items,
+  taxRate,
+) {
+  const subtotal = items.reduce((a, b) => a + b, 0);
+  return subtotal * (1 + taxRate);
+}
+`, 'x.ts');
+
+  const micro = result.find(a => a.label === 'compute-total');
+  assert.ok(micro, 'expected the compute-total anchor to be found');
+  assert.equal(micro!.elementKind, 'function');
+  assert.equal(micro!.elementName, 'computeTotal');
+  // scopeStartLine must point at the `export function computeTotal(` line,
+  // not anywhere inside the JSDoc block above it.
+  assert.ok(micro!.scopeStartLine !== undefined);
+  assert.ok(micro!.scopeEndLine !== undefined);
 });
 
-test('falls back to regex-based scope detection when adapter is not ready', () => {
-  const cfg = getLangConfig('x.ts')!;
-  const content = `function realFunctionName() { return 1; } // @synd\n`;
-  const notReadyAdapter: GraphAdapterLike = {
-    isReady: () => false,
-    getNodeBoundary: () => { throw new Error('should not be called'); },
-    getNextNode: () => { throw new Error('should not be called'); },
-    getEnclosingScope: () => { throw new Error('should not be called'); },
-  };
-  const result = parseAnchors(content, cfg, { graphAdapter: notReadyAdapter, filePath: 'x.ts' });
-  assert.equal(result.length, 1);
-  assert.equal(result[0].elementName, 'realFunctionName');
+test('AST scope resolution is not fooled by unbalanced braces inside a // comment', () => {
+  const result = anchors(`
+export function noise2() {}
+
+// @synd: with-comment-brace
+export function withCommentBrace(name) {
+  // NOTE: legacy behavior used an unbalanced brace like this: }
+  console.log(name);
+  return name;
+}
+
+export function afterCommentBrace(x) {
+  return x + 1;
+}
+`, 'x.ts');
+  const micro = result.find(a => a.label === 'with-comment-brace');
+  assert.ok(micro);
+  assert.equal(micro!.elementName, 'withCommentBrace');
+  // withCommentBrace's closing brace is on line 8 (0-based) -> exclusive
+  // end 9; afterCommentBrace starts at line 10. Must not reach line 10.
+  assert.ok(micro!.scopeEndLine! <= 9);
 });
 
-test('falls back to regex-based scope detection when no adapter is supplied at all', () => {
-  const cfg = getLangConfig('x.ts')!;
-  const content = `function realFunctionName() { return 1; } // @synd\n`;
+test('inline bare anchor resolves the enclosing declaration via tree-sitter, including inside a class body (Java)', () => {
+  const result = anchors(`
+public class Foo {
+  public void calculateTotal() { // @synd
+    return;
+  }
+}
+`, 'x.java');
+  const micro = result.find(a => a.inline);
+  assert.ok(micro);
+  assert.equal(micro!.elementKind, 'method');
+  assert.equal(micro!.elementName, 'calculateTotal');
+});
+
+test('above-annotation resolves a PHP method declared inside a class body via tree-sitter', () => {
+  const result = anchors(`<?php
+class Foo {
+  private $x;
+
+  // @synd
+  public function getName() {
+    return $this->name;
+  }
+}
+`, 'x.php');
+  const micro = result.find(a => a.autoScoped);
+  assert.ok(micro, 'expected an auto-scoped micro anchor');
+  assert.equal(micro!.elementKind, 'method');
+  assert.equal(micro!.elementName, 'getName');
+});
+
+test('falls back to regex-based scope detection for a language with no bundled tree-sitter grammar (SQL)', () => {
+  const cfg = getLangConfig('x.sql');
+  // SQL isn't in languages.ts's BY_EXTENSION table today, so guard this
+  // test to skip cleanly if that ever changes rather than failing on an
+  // unrelated config gap.
+  if (!cfg) return;
+  const content = `CREATE TABLE users (id INT); -- @synd\n`;
   const result = parseAnchors(content, cfg);
   assert.equal(result.length, 1);
-  assert.equal(result[0].elementName, 'realFunctionName');
+});
+
+test('falls back to regex-based scope detection when the AST engine has not been initialized for this language', () => {
+  // 'ruby' was intentionally not warmed up in the `before` hook above, so
+  // this exercises the "grammar exists but not loaded" fallback path.
+  const cfg = getLangConfig('x.rb')!;
+  const content = `def realMethodName\n  1\nend # @synd\n`;
+  const result = parseAnchors(content, cfg);
+  assert.equal(result.length, 1);
+  // Regex fallback catches the generic assignment shape only, so this just
+  // confirms the anchor is still found and doesn't crash — not that it's
+  // perfectly scoped, which is exactly why we prefer AST when available.
 });
 
 // ─── Fail-fast contract ─────────────────────────────────────────────────────

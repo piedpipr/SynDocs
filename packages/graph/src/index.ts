@@ -1,5 +1,5 @@
 import { CodeGraphAdapter } from './adapter';
-export type { CodeTokenEdge, GraphEdge, NodeBoundary } from './adapter';
+export type { CodeTokenEdge, GraphEdge } from './adapter';
 export { CodeGraphAdapter } from './adapter';
 
 /**

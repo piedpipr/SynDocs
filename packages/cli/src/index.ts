@@ -3,7 +3,7 @@
 
 import path from 'path';
 import { loadConfig, parseCliArgs, c } from './utils';
-import { initTokenizer, getAllConfiguredGrammarIds } from '@syndocs/core';
+import { initTokenizer, initAstEngine, getAllConfiguredGrammarIds } from '@syndocs/core';
 import { runInit }       from './commands/init';
 import { runCheck }      from './commands/check';
 import { runUpdate }     from './commands/update';
@@ -119,6 +119,9 @@ async function main(): Promise<void> {
   // Comment/annotation detection (parseAnchors, called by the commands below)
   // is backed by a TextMate grammar tokenizer that must be warmed up before
   // any synchronous parseAnchors() call — see @syndocs/core's tokenizer.ts.
+  // Scope resolution (mapping an annotation to the exact function/class
+  // boundaries it documents) is backed by tree-sitter and needs its own
+  // async warm-up the same way — see @syndocs/core's ast-scope.ts.
   // Commands that never touch source files (install/auth/graph-link/serve's
   // own request handling, etc.) skip this entirely so they stay instant.
   const COMMANDS_NEEDING_TOKENIZER = new Set(['init', 'check', 'update', 'prune', 'tree', 'lint-embeds']);
@@ -131,6 +134,20 @@ async function main(): Promise<void> {
         'detection: ' + (err instanceof Error ? err.message : String(err)),
       );
       process.exit(1);
+    }
+    try {
+      await initAstEngine(getAllConfiguredGrammarIds());
+    } catch (err) {
+      // Not fatal: ast-scope.ts's resolveScopeViaAst degrades to the regex
+      // fallback tier in anchor-parser.ts when the AST engine isn't ready,
+      // so a failure here (e.g. offline install missing tree-sitter-wasms)
+      // should warn, not abort — unlike the tokenizer above, which comment
+      // detection itself has no fallback for.
+      console.error(
+        c.yellow('Warning:') + ' failed to initialize the tree-sitter scope engine — falling back to ' +
+        'less precise regex-based scope detection for this run: ' +
+        (err instanceof Error ? err.message : String(err)),
+      );
     }
   }
 

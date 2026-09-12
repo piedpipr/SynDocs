@@ -40,13 +40,6 @@ export interface CodeTokenEdge {
   targetSymbol: string | null;
 }
 
-export interface NodeBoundary {
-  name: string;
-  kind: string;
-  startLine: number;
-  endLine: number;
-}
-
 // ─── Adapter ──────────────────────────────────────────────────────────────────
 
 export class CodeGraphAdapter {
@@ -192,93 +185,6 @@ export class CodeGraphAdapter {
         `${err instanceof Error ? err.message : String(err)}\n`,
       );
       return [];
-    }
-  }
-
-  /**
-   * Find the tightest AST node that contains the given line.
-   * Used to resolve @syndocs: label markers to exact function/method boundaries.
-   */
-  getNodeBoundary(absOrRelPath: string, nearLine: number): NodeBoundary | null {
-    const rel = this._toRel(absOrRelPath);
-    try {
-      const stmt = this.db.prepare(`
-        SELECT name, kind, start_line, end_line
-        FROM nodes
-        WHERE file_path = ?
-          AND start_line <= ?
-          AND end_line   >= ?
-          AND kind IN ('function','method','class','struct','property','field','constant','variable','enum')
-        ORDER BY (end_line - start_line) ASC
-        LIMIT 1
-      `);
-      const row = stmt.get(rel, nearLine, nearLine) as any;
-      if (!row) return null;
-      return {
-        name:      String(row.name),
-        kind:      String(row.kind),
-        startLine: Number(row.start_line),
-        endLine:   Number(row.end_line),
-      };
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * Find the exact AST declaration immediately starting at or below fromLine.
-   */
-  getNextNode(absOrRelPath: string, fromLine: number): NodeBoundary | null {
-    const rel = this._toRel(absOrRelPath);
-    try {
-      const stmt = this.db.prepare(`
-        SELECT name, kind, start_line, end_line
-        FROM nodes
-        WHERE file_path = ?
-          AND start_line >= ?
-          AND kind IN ('function','method','class','struct','property','field','constant','variable','enum')
-        ORDER BY start_line ASC
-        LIMIT 1
-      `);
-      const row = stmt.get(rel, fromLine) as any;
-      if (!row) return null;
-      return {
-        name:      String(row.name),
-        kind:      String(row.kind),
-        startLine: Number(row.start_line),
-        endLine:   Number(row.end_line),
-      };
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * Find the parent function or class enclosing the given line.
-   */
-  getEnclosingScope(absOrRelPath: string, line: number): NodeBoundary | null {
-    const rel = this._toRel(absOrRelPath);
-    try {
-      const stmt = this.db.prepare(`
-        SELECT name, kind, start_line, end_line
-        FROM nodes
-        WHERE file_path = ?
-          AND start_line <= ?
-          AND end_line >= ?
-          AND kind IN ('function','method','class')
-        ORDER BY (end_line - start_line) ASC
-        LIMIT 1
-      `);
-      const row = stmt.get(rel, line, line) as any;
-      if (!row) return null;
-      return {
-        name:      String(row.name),
-        kind:      String(row.kind),
-        startLine: Number(row.start_line),
-        endLine:   Number(row.end_line),
-      };
-    } catch {
-      return null;
     }
   }
 

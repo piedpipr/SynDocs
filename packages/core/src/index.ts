@@ -11,7 +11,6 @@ export type {
   ParsedAnchor,
   ParsedEmbed,
 } from './types';
-export type { GraphAdapterLike, NodeBoundaryLike } from './graph-adapter-like';
 export type { CommentSpan } from './tokenizer';
 
 // Hashing
@@ -25,6 +24,11 @@ export { getCodeBlockLang, getLangConfig, getAllConfiguredGrammarIds } from './l
 // `parseAnchors` call; `extractCommentSpans` is exposed for callers that
 // want raw comment spans without the full anchor-parsing pipeline.
 export { initTokenizer, isTokenizerReady, extractCommentSpans } from './tokenizer';
+
+// AST-based scope resolution (see ast-scope.ts). `initAstEngine` must be
+// awaited once before any `parseAnchors` call that expects tree-sitter
+// accurate scope boundaries, exactly like `initTokenizer` above.
+export { initAstEngine, isAstEngineReady, hasAstSupport } from './ast-scope';
 
 // Anchor parsing
 export { extractMicroDocCode, parseAnchors } from './anchor-parser';

@@ -1,77 +1,36 @@
 // @syndocs
 import type { LanguageConfig, ParsedAnchor } from './types';
-import type { GraphAdapterLike } from './graph-adapter-like';
 import { toKebabSlug, generateUniqueSlug } from './slug';
 import { extractCommentSpans, type CommentSpan } from './tokenizer';
+import { hasAstSupport, resolveScopeViaAst } from './ast-scope';
 
-// ─── Declaration detection patterns (regex fallback for structural scoping) ───
-// These regexes extract element name and kind from a declaration line. They
-// are intentionally broad and are used ONLY when no CodeGraph AST adapter is
-// available (see `resolveScopeBoundaries` / `ParseAnchorsOptions.graphAdapter`
-// below) — CodeGraph's AST is preferred whenever the project has it indexed,
-// since it knows real symbol boundaries instead of guessing from one line of
-// text. This table is the pre-existing fallback tier, kept as-is.
-
+// ─── Declaration detection patterns (last-resort fallback for structural ───
+// ─── scoping, languages with NO bundled tree-sitter grammar only)        ───
+//
+// Scope resolution is now tree-sitter-based (see ast-scope.ts) for every
+// language with a bundled grammar — it can't be fooled by a brace/quote
+// character inside a string, comment, or template literal, unlike the
+// regex+brace-counting this table used to back exclusively. This table
+// now only fires for languages ast-scope.ts has no grammar for (currently:
+// SQL — DDL statements aren't really "declarations with a body" in the
+// same sense anyway). It is intentionally NOT exhaustive anymore; do not
+// add entries for languages that have a grammar in ast-scope.ts's
+// GRAMMARS table — fix or extend that table instead.
 const DECLARATION_PATTERNS: Array<{ re: RegExp; kind: string; nameGroup: number }> = [
-  // TypeScript / JavaScript / Java / C# / Go / Rust / Swift / Kotlin
-  { re: /(?:export\s+)?(?:async\s+)?function\s+(\w+)/,          kind: 'function',  nameGroup: 1 },
-  { re: /(?:export\s+)?(?:abstract\s+)?class\s+(\w+)/,          kind: 'class',     nameGroup: 1 },
-  { re: /(?:export\s+)?interface\s+(\w+)/,                       kind: 'interface', nameGroup: 1 },
-  { re: /(?:export\s+)?type\s+(\w+)\s*=/,                       kind: 'type',      nameGroup: 1 },
-  { re: /(?:export\s+)?enum\s+(\w+)/,                           kind: 'enum',      nameGroup: 1 },
-  { re: /(?:export\s+)?(?:const|let|var)\s+(\w+)\s*[=:]/,       kind: 'variable',  nameGroup: 1 },
-  // NOTE: bare "identifier followed by (" detection (Java/C#-style typed
-  // method declarations like `public void foo()`) is handled separately by
-  // `detectMethodCallLikeDeclaration` below, NOT as a DECLARATION_PATTERNS
-  // regex entry — a naive `(\w+)\s*\(` pattern here matched `$table->string(`
-  // as a method declaration named "string" (see the regression this fixed:
-  // an inline `// @synd` after `$table->string(...)->default(...)` was
-  // misidentified because nothing distinguished "declaring a method" from
-  // "calling one on an object"). The dedicated function below requires the
-  // identifier not be preceded by `.`, `->`, or `::`, and excludes common
-  // statement keywords, before treating it as a declaration.
-  // Go
-  { re: /func\s+(?:\(\w+\s+\*?\w+\)\s+)?(\w+)\s*\(/,           kind: 'function',  nameGroup: 1 },
-  { re: /type\s+(\w+)\s+struct/,                                 kind: 'struct',    nameGroup: 1 },
-  // Rust
-  { re: /(?:pub\s+)?fn\s+(\w+)/,                                kind: 'function',  nameGroup: 1 },
-  { re: /(?:pub\s+)?struct\s+(\w+)/,                            kind: 'struct',    nameGroup: 1 },
-  { re: /(?:pub\s+)?trait\s+(\w+)/,                             kind: 'trait',     nameGroup: 1 },
-  { re: /impl(?:\s*<[^>]*>)?\s+(\w+)/,                          kind: 'impl',      nameGroup: 1 },
-  // Python
-  { re: /def\s+(\w+)\s*\(/,                                     kind: 'function',  nameGroup: 1 },
-  { re: /class\s+(\w+)/,                                        kind: 'class',     nameGroup: 1 },
-  // Ruby
-  { re: /def\s+(\w+)/,                                          kind: 'method',    nameGroup: 1 },
-  { re: /module\s+(\w+)/,                                       kind: 'module',    nameGroup: 1 },
-  // PHP
-  { re: /(?:public|private|protected|static)?\s*function\s+(\w+)/,  kind: 'function', nameGroup: 1 },
-  // SQL
+  // SQL — no tree-sitter grammar wired up (DDL/DML, not really "code
+  // declarations" in the AST sense that would benefit from full parsing).
   { re: /CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW|FUNCTION|PROCEDURE)\s+(\w+)/i, kind: 'schema', nameGroup: 1 },
-  // Swift
-  { re: /(?:public|private|internal|open)?\s*func\s+(\w+)/,     kind: 'function',  nameGroup: 1 },
-  // Kotlin
-  { re: /(?:fun|val|var)\s+(\w+)/,                              kind: 'function',  nameGroup: 1 },
-  // Generic single-line assignment (fallback for const X = ..., etc.)
-  // Guarded against matching object property access (e.g. `$table->foo =`,
-  // `this.foo =`) as a variable declaration — same class of bug as the
-  // removed generic method pattern above (see detectMethodCallLikeDeclaration).
+  // Generic single-line assignment — last-resort catch-all for any
+  // ungrammared language's `const X = ...`-shaped line. Guarded against
+  // matching object property access (e.g. `$table->foo =`, `this.foo =`)
+  // as a variable declaration.
   { re: /(?<![.\w]|->|::)(\w+)\s*[:=][^=]/,                     kind: 'variable',  nameGroup: 1 },
 ];
 
 const ANCHOR_RE = /@(?:syndocs|synd)(?:\s*:\s*(\S+))?/;
 
 export interface ParseAnchorsOptions {
-  /**
-   * Optional CodeGraph adapter. When present and `.isReady()`, scope
-   * resolution (mapping an annotation to the function/class/etc. it
-   * documents) prefers real AST boundaries over the regex-based
-   * `DECLARATION_PATTERNS` fallback below. Comment/annotation DETECTION
-   * itself never depends on this — it always uses the grammar tokenizer —
-   * so `syndocs` works fully even when CodeGraph hasn't been indexed.
-   */
-  graphAdapter?: GraphAdapterLike | null;
-  /** Repo-relative or absolute path of the file being parsed, required to query graphAdapter. */
+  /** Repo-relative or absolute path of the file being parsed (currently informational only; kept for forward-compatibility with future path-sensitive resolution). */
   filePath?: string;
 }
 
@@ -94,6 +53,15 @@ export interface ParseAnchorsOptions {
  * grammar edge case, unsupported language snuck through, etc.), we fall back
  * to a conservative single-line scanner so one problematic file can't take
  * down an entire `syndocs check`/`update` run — see `scanCommentsFallback`.
+ *
+ * Scope resolution (mapping an annotation to the exact function/class/etc.
+ * boundaries it documents) is tree-sitter-based — see ast-scope.ts — for
+ * every language with a bundled grammar, both for bare AND explicit-label
+ * annotations. Languages with no bundled grammar fall back to the regex
+ * `DECLARATION_PATTERNS` tier below. This module has no dependency on
+ * CodeGraph: CodeGraph's role in SynDocs is the dependency graph (blast
+ * radius, wiki-links, in-code token highlighting in the Web Studio), which
+ * is unrelated to finding a declaration's own start/end lines.
  */
 // @synd: parse-anchors
 export function parseAnchors(
@@ -136,7 +104,7 @@ export function parseAnchors(
           hasWholeFile = true;
         } else {
           // Auto-scoped micro-doc: scan the line(s) after the comment block for a code element
-          const scope = resolveScopeBoundaries(lines, span.endLine, false, options);
+          const scope = resolveScopeBoundaries(content, lines, langConfig, span.endLine, false);
           const slug = scope
             ? generateUniqueSlug(toKebabSlug(scope.name), seenLabels)
             : generateUniqueSlug(`block-L${i + 1}`, seenLabels);
@@ -154,7 +122,15 @@ export function parseAnchors(
           });
         }
       } else {
-        // Explicit label
+        // Explicit label — this branch previously never resolved scope
+        // boundaries at all (see ast-scope.ts's file header, bug #2: a
+        // `@synd: label` sitting inside a multi-line JSDoc block above a
+        // multi-line function signature produced a corrupted snippet that
+        // started mid-comment, because nothing here ever looked past the
+        // comment itself). Resolve the same way the bare-annotation branch
+        // above does, using the comment block's END line as the scan point
+        // so a label anywhere inside a multi-line comment still resolves
+        // to the declaration that follows the whole block.
         const label = rawLabel.trim();
         if (seenLabels.has(label)) {
           process.stderr.write(
@@ -163,7 +139,16 @@ export function parseAnchors(
           continue;
         }
         seenLabels.add(label);
-        anchors.push({ kind: 'micro', label, lineIndex: i });
+        const scope = resolveScopeBoundaries(content, lines, langConfig, span.endLine, false);
+        anchors.push({
+          kind: 'micro',
+          label,
+          lineIndex: i,
+          elementKind: scope?.kind,
+          elementName: scope?.name,
+          scopeStartLine: scope?.startLine,
+          scopeEndLine: scope?.endLine,
+        });
       }
       continue;
     }
@@ -171,7 +156,7 @@ export function parseAnchors(
     // ── 2. Inline (trailing) annotation ───────────────────────────────
     if (!rawLabel) {
       // Inline bare: scope to the current line's code element
-      const scope = resolveScopeBoundaries(lines, i, true, options);
+      const scope = resolveScopeBoundaries(content, lines, langConfig, i, true);
       const slug = scope
         ? generateUniqueSlug(toKebabSlug(scope.name), seenLabels)
         : generateUniqueSlug(`line-L${i + 1}`, seenLabels);
@@ -189,6 +174,8 @@ export function parseAnchors(
         scopeEndLine: scope?.endLine,
       });
     } else {
+      // Explicit inline label — same fix as the above-annotation branch:
+      // resolve scope boundaries instead of leaving them undefined.
       const label = rawLabel.trim();
       if (seenLabels.has(label)) {
         process.stderr.write(
@@ -197,7 +184,17 @@ export function parseAnchors(
         continue;
       }
       seenLabels.add(label);
-      anchors.push({ kind: 'micro', label, lineIndex: i, inline: true });
+      const scope = resolveScopeBoundaries(content, lines, langConfig, i, true);
+      anchors.push({
+        kind: 'micro',
+        label,
+        lineIndex: i,
+        inline: true,
+        elementKind: scope?.kind,
+        elementName: scope?.name,
+        scopeStartLine: scope?.startLine,
+        scopeEndLine: scope?.endLine,
+      });
     }
   }
 
@@ -292,59 +289,30 @@ function isHeaderArea(lines: string[], lineIndex: number): boolean {
 /**
  * Resolve the scope boundaries for an annotation.
  *
- * If a ready CodeGraph adapter + filePath were supplied, prefer real AST
- * node boundaries: `getEnclosingScope`/`getNodeBoundary` for inline
- * annotations (the code is on the same line as the comment), or
- * `getNextNode` for above-line annotations (the declaration is the next AST
- * node after the comment). Falls back to the regex-based
- * `DECLARATION_PATTERNS` scan whenever the adapter is absent, not ready, or
- * simply has no node at that location (e.g. annotation sits over a bare
- * statement with no named symbol) — the regex path still adds value there.
+ * Prefers a real tree-sitter AST (see ast-scope.ts) whenever this file's
+ * language has a bundled grammar — this can't be fooled by a brace,
+ * quote, or colon character that merely appears inside a string, comment,
+ * or template literal, unlike the regex/brace-counting fallback below.
+ * Falls back to the regex-based `DECLARATION_PATTERNS` scan only when
+ * there's no grammar for this language, or the AST engine hasn't been
+ * initialized (`initAstEngine()` wasn't awaited — see ast-scope.ts), or
+ * the AST resolver genuinely finds nothing at that location.
  */
 function resolveScopeBoundaries(
+  content: string,
   lines: string[],
+  langConfig: LanguageConfig,
   lineIndex: number,
   inline: boolean,
-  options: ParseAnchorsOptions,
 ): ScopeResult | null {
-  const astResult = resolveScopeViaGraph(lineIndex, inline, options);
-  if (astResult) return astResult;
+  if (hasAstSupport(langConfig.grammarId)) {
+    const astResult = resolveScopeViaAst(content, langConfig.grammarId, lineIndex, inline);
+    if (astResult) return astResult;
+  }
 
   return inline
     ? resolveInlineScope(lines, lineIndex)
     : resolveAboveScope(lines, lineIndex);
-}
-
-function resolveScopeViaGraph(
-  lineIndex: number,
-  inline: boolean,
-  options: ParseAnchorsOptions,
-): ScopeResult | null {
-  const { graphAdapter, filePath } = options;
-  if (!graphAdapter || !filePath) return null;
-  if (!graphAdapter.isReady()) return null;
-
-  try {
-    // 1-based lines in CodeGraph's schema vs. our 0-based lineIndex.
-    const oneBasedLine = lineIndex + 1;
-
-    const node = inline
-      ? graphAdapter.getEnclosingScope(filePath, oneBasedLine) ?? graphAdapter.getNodeBoundary(filePath, oneBasedLine)
-      : graphAdapter.getNextNode(filePath, oneBasedLine + 1);
-
-    if (!node) return null;
-
-    return {
-      name: node.name,
-      kind: node.kind,
-      // Convert back to 0-based, exclusive-end to match ScopeResult's contract.
-      startLine: node.startLine - 1,
-      endLine: node.endLine,
-    };
-  } catch {
-    // Any adapter error (stale DB, schema drift, etc.) falls through to regex.
-    return null;
-  }
 }
 
 /**
@@ -431,12 +399,13 @@ function resolveAboveScope(lines: string[], lineIndex: number): ScopeResult | nu
 
 /**
  * Try to detect the code element name and kind from a declaration line.
- * Checks DECLARATION_PATTERNS first (keyword-anchored: function/class/def/
- * fn/struct/etc — these can't be confused with a call or member access
- * since they require a literal declaration keyword), then falls back to
- * `detectMethodCallLikeDeclaration` for languages like Java/C# where a
- * method declaration has no fixed keyword (`public void foo()`), which
- * needs the extra guards below to avoid misreading a method *call* as one.
+ * This is the last-resort tier for languages with no bundled tree-sitter
+ * grammar (see ast-scope.ts) — currently just SQL, plus a generic
+ * `identifier = ...` catch-all. Languages that previously needed the more
+ * elaborate bare-`identifier(`-declaration heuristics here (Java, C#,
+ * Kotlin) now all have tree-sitter grammars and are resolved correctly and
+ * unambiguously in ast-scope.ts before this function is ever reached — see
+ * that module's GRAMMARS table.
  */
 function detectElement(codeLine: string): { name: string; kind: string } | null {
   for (const pat of DECLARATION_PATTERNS) {
@@ -444,51 +413,6 @@ function detectElement(codeLine: string): { name: string; kind: string } | null 
     if (m && m[pat.nameGroup]) {
       return { name: m[pat.nameGroup], kind: pat.kind };
     }
-  }
-  return detectMethodCallLikeDeclaration(codeLine);
-}
-
-// Statement-leading keywords that can legitimately precede `identifier(`
-// without that identifier being a declaration — e.g. `if (isValid(x))`,
-// `return calculateTotal(x)`. Deliberately does NOT include type-keyword-like
-// words (e.g. `void`, `int`) since those precede a genuine declaration name
-// in Java/C#-style `public void foo()` and must NOT be excluded.
-const STATEMENT_KEYWORDS = new Set([
-  'if', 'while', 'for', 'switch', 'catch', 'return', 'new', 'else', 'foreach',
-  'typeof', 'instanceof', 'yield', 'throw', 'delete', 'await',
-]);
-
-/**
- * Detect a bare `identifier(` declaration (Java/C#/Kotlin-style typed method
- * declarations with no fixed keyword, e.g. `public void foo()`), while
- * rejecting the shapes that are calls, not declarations:
- *   - preceded by `.`, `->`, or `::` (member access: `$table->string(...)`,
- *     `this.doSomething()`, `self::helper()`)
- *   - the identifier itself, or the word immediately before it, is a
- *     statement-leading keyword (`if (x())`, `return foo()`)
- *   - it's a nested call argument (`if (isValid(x))` — the inner `isValid`
- *     is directly preceded by `(`)
- * This exists as a separate, more heavily guarded function (rather than one
- * more entry in DECLARATION_PATTERNS) specifically because a single regex
- * here previously matched `$table->string('x')->default('y')` as a method
- * declaration named `string` — any future change to these rules should keep
- * that case, and the DECLARATION_PATTERNS-keyword-anchored cases above it,
- * covered by anchor-parser.test.ts.
- */
-function detectMethodCallLikeDeclaration(codeLine: string): { name: string; kind: string } | null {
-  const re = /(?<![.\w]|->|::)([A-Za-z_]\w*)\s*\(/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(codeLine))) {
-    const name = m[1];
-    if (STATEMENT_KEYWORDS.has(name)) continue;
-
-    const before = codeLine.slice(0, m.index);
-    if (/\($/.test(before.trimEnd())) continue; // nested call argument
-
-    const prevWord = before.match(/([A-Za-z_]\w*)\s*$/);
-    if (prevWord && STATEMENT_KEYWORDS.has(prevWord[1])) continue;
-
-    return { name, kind: 'method' };
   }
   return null;
 }
