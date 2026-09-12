@@ -561,6 +561,31 @@ async function buildData(cwd: string, config: SynDocsConfig): Promise<SynDocsDat
     return true;
   });
 
+  // Add lightweight graph nodes for any CodeGraph source/target file not yet documented.
+  // Without this, buildGraph() in the browser silently drops every edge where either
+  // endpoint isn't in DATA.nodes, giving an incomplete graph even when CodeGraph has
+  // many more connections than the set of @syndocs-annotated files.
+  // We skip obvious non-project paths (node_modules, dist, .git).
+  const ignoredPrefixes = ['node_modules/', 'dist/', '.git/', '.next/', 'build/'];
+  const nodeIds = new Set(nodes.map(n => n.id));
+  for (const e of dedupedEdges) {
+    for (const fileId of [e.source, e.target]) {
+      if (!fileId || nodeIds.has(fileId)) continue;
+      if (ignoredPrefixes.some(p => fileId.startsWith(p))) continue;
+      const label = fileId.split('/').pop() ?? fileId;
+      const parts = fileId.split('/');
+      const group = parts.length > 2 ? parts.slice(0, 2).join('/') : parts[0];
+      nodes.push({
+        id: fileId,
+        label,
+        status: 'none',   // no mirror doc — shown as a dim node in the graph
+        group,
+        type: 'doc',
+      });
+      nodeIds.add(fileId);
+    }
+  }
+
   // Build hierarchical trees for sidebar
   const docsTree = buildDocsTree(nodes);
   const codebaseTree = buildCodebaseTree(cwd, config, nodes);

@@ -779,13 +779,10 @@ code, kbd, samp, pre {
 /* ─── Thread-link spans (overlaid on hljs output) ──────────────────────────── */
 .code-link {
   cursor: pointer;
-  border-radius: 3px;
-  padding: 0 2px;
+  border-radius: 2px;
   transition: all 0.14s;
   font-weight: 700;
   position: relative;
-  display: inline;
-  letter-spacing: -0.01em;
 }
 .code-link::after {
   content: '';
@@ -1709,21 +1706,21 @@ code, kbd, samp, pre {
       <div id="graph-physics">
         <div class="physics-row">
           <label>⊕ Gravity</label>
-          <input type="range" class="physics-slider" id="slider-gravity" min="0" max="1" step="0.01" value="0.08"
+          <input type="range" class="physics-slider" id="slider-gravity" min="0" max="1" step="0.01" value="0.06"
             oninput="onPhysicsChange()">
-          <span class="physics-val" id="val-gravity">0.08</span>
+          <span class="physics-val" id="val-gravity">0.06</span>
         </div>
         <div class="physics-row">
           <label>↔ Charge</label>
-          <input type="range" class="physics-slider" id="slider-charge" min="-600" max="-30" step="10" value="-200"
+          <input type="range" class="physics-slider" id="slider-charge" min="-600" max="-30" step="10" value="-280"
             oninput="onPhysicsChange()">
-          <span class="physics-val" id="val-charge">-200</span>
+          <span class="physics-val" id="val-charge">-280</span>
         </div>
         <div class="physics-row">
           <label>↦ Distance</label>
-          <input type="range" class="physics-slider" id="slider-dist" min="30" max="300" step="10" value="90"
+          <input type="range" class="physics-slider" id="slider-dist" min="30" max="300" step="10" value="110"
             oninput="onPhysicsChange()">
-          <span class="physics-val" id="val-dist">90</span>
+          <span class="physics-val" id="val-dist">110</span>
         </div>
       </div>
       <div class="graph-footer-row">
@@ -1755,6 +1752,12 @@ let linkDirection = localStorage.getItem('syndocs_link_direction') || 'all'; // 
 let simulation = null;
 let svgG = null;
 let graphNodes = null;
+
+// Graph state hoisted so onPhysicsChange can update forces without rebuilding
+let graphW = 400;
+let graphH = 500;
+let graphEdgeCount = new Map();
+let graphLinkForce = null;
 
 // Thread rAF loop state
 let threadRafId = null;
@@ -2937,9 +2940,15 @@ function updateConnectedList(docId) {
 function buildGraph() {
   const svg = d3.select('#graph-svg');
   const root = document.getElementById('graph-svg-container');
-  const W = root.clientWidth || 400;
-  const H = root.clientHeight || 500;
 
+  // Update module-level dimensions so onPhysicsChange can access them
+  graphW = root.clientWidth || 400;
+  graphH = root.clientHeight || 500;
+  const W = graphW;
+  const H = graphH;
+
+  // Stop old simulation before wiping DOM
+  if (simulation) { simulation.stop(); simulation = null; }
   svg.selectAll('*').remove();
 
   if (!DATA.nodes || DATA.nodes.length === 0) return;
@@ -2948,6 +2957,7 @@ function buildGraph() {
     if (d.status === 'ok') return 'var(--ok)';
     if (d.status === 'stale') return 'var(--stale)';
     if (d.status === 'missing') return 'var(--missing)';
+    if (d.status === 'none') return 'var(--text-dim)';
     return 'var(--text-muted)';
   };
 
@@ -2956,19 +2966,21 @@ function buildGraph() {
     return map[d.kind] || 'var(--border)';
   };
 
-  // Compute edge counts for hub sizing
-  const edgeCount = new Map();
-  DATA.nodes.forEach(n => edgeCount.set(n.id, 0));
+  // Compute edge counts for hub sizing (stored in module scope for onPhysicsChange)
+  graphEdgeCount = new Map();
+  DATA.nodes.forEach(n => graphEdgeCount.set(n.id, 0));
   DATA.edges.forEach(e => {
-    edgeCount.set(e.source, (edgeCount.get(e.source) || 0) + 1);
-    edgeCount.set(e.target, (edgeCount.get(e.target) || 0) + 1);
+    graphEdgeCount.set(e.source, (graphEdgeCount.get(e.source) || 0) + 1);
+    graphEdgeCount.set(e.target, (graphEdgeCount.get(e.target) || 0) + 1);
   });
+  const edgeCount = graphEdgeCount;
 
   const nodeRadius = d => {
     const cnt = edgeCount.get(d.id) || 0;
     return Math.min(5 + cnt * 1.2, 14);
   };
 
+  // Attach zoom exactly once — reuse if already bound
   const zoom = d3.zoom().scaleExtent([0.1, 6])
     .on('zoom', e => svgG.attr('transform', e.transform));
   svg.call(zoom);
@@ -2990,6 +3002,7 @@ function buildGraph() {
 
   svgG = svg.append('g');
 
+  // Build node objects, preserving positions from old simulation nodes when rebuilding
   const nodeMap = new Map(DATA.nodes.map(n => [n.id, { ...n }]));
   const links = DATA.edges
     .filter(e => nodeMap.has(e.source) && nodeMap.has(e.target) && e.source !== e.target)
@@ -2997,22 +3010,23 @@ function buildGraph() {
   const nodes = Array.from(nodeMap.values());
 
   // Read physics slider values (with safe defaults)
-  const gravityStr  = parseFloat((document.getElementById('slider-gravity')  || { value: '0.08' }).value);
-  const chargeStr   = parseFloat((document.getElementById('slider-charge')   || { value: '-200' }).value);
-  const distStr     = parseFloat((document.getElementById('slider-dist')     || { value: '90'  }).value);
+  const gravityVal = parseFloat((document.getElementById('slider-gravity') || { value: '0.06' }).value);
+  const chargeVal  = parseFloat((document.getElementById('slider-charge')  || { value: '-280' }).value);
+  const distVal    = parseFloat((document.getElementById('slider-dist')    || { value: '110'  }).value);
 
-  // Simulation with Obsidian-like tighter clustering
+  // Simulation — Obsidian-like open layout with radial spread
+  graphLinkForce = d3.forceLink(links).id(d => d.id)
+    .distance(d => d.kind === 'contains' ? 45 : distVal)
+    .strength(d => d.kind === 'contains' ? 0.6 : 0.25);
+
   simulation = d3.forceSimulation(nodes)
-    .alphaDecay(0.022)
-    .velocityDecay(0.42)
-    .force('link', d3.forceLink(links).id(d => d.id).distance(d => {
-      return d.kind === 'contains' ? 40 : distStr;
-    }).strength(d => d.kind === 'contains' ? 0.7 : 0.3))
-    .force('charge', d3.forceManyBody().strength(d => chargeStr - (edgeCount.get(d.id) || 0) * 10))
-    .force('center', d3.forceCenter(W / 2, H / 2).strength(gravityStr))
-    .force('collision', d3.forceCollide().radius(d => nodeRadius(d) + 8).strength(0.9))
-    .force('x', d3.forceX(W / 2).strength(gravityStr * 0.5))
-    .force('y', d3.forceY(H / 2).strength(gravityStr * 0.5));
+    .alphaDecay(0.025)
+    .velocityDecay(0.38)
+    .force('link', graphLinkForce)
+    .force('charge', d3.forceManyBody().strength(d => chargeVal - (edgeCount.get(d.id) || 0) * 20))
+    .force('center', d3.forceCenter(W / 2, H / 2).strength(gravityVal))
+    .force('collision', d3.forceCollide().radius(d => nodeRadius(d) + 10).strength(0.85))
+    .force('radial', d3.forceRadial(Math.min(W, H) * 0.3, W / 2, H / 2).strength(0.04));
 
   // Obsidian-style straight graph lines — brighter by default
   const linkLines = svgG.append('g')
@@ -3111,9 +3125,28 @@ function onPhysicsChange() {
   const dstEl  = document.getElementById('slider-dist');
   if (gravEl) document.getElementById('val-gravity').textContent = parseFloat(gravEl.value).toFixed(2);
   if (chgEl)  document.getElementById('val-charge').textContent  = chgEl.value;
-  if (dstEl)  document.getElementById('val-dist').textContent   = dstEl.value;
-  // Rebuild graph with new physics
-  buildGraph();
+  if (dstEl)  document.getElementById('val-dist').textContent    = dstEl.value;
+
+  // Update forces in-place — no rebuild so nodes keep their current positions
+  if (!simulation) { buildGraph(); return; }
+
+  const gravity = parseFloat(gravEl ? gravEl.value : '0.06');
+  const charge  = parseFloat(chgEl  ? chgEl.value  : '-280');
+  const dist    = parseFloat(dstEl  ? dstEl.value  : '110');
+  const W = graphW, H = graphH;
+
+  if (graphLinkForce) {
+    graphLinkForce.distance(d => d.kind === 'contains' ? 45 : dist);
+  }
+  simulation
+    .force('charge', d3.forceManyBody().strength(d => charge - (graphEdgeCount.get(d.id) || 0) * 20))
+    .force('center', d3.forceCenter(W / 2, H / 2).strength(gravity))
+    .force('radial', d3.forceRadial(Math.min(W, H) * 0.3, W / 2, H / 2).strength(0.04))
+    .alphaTarget(0.3)
+    .restart();
+
+  // Cool down after 800 ms so the graph settles
+  setTimeout(() => { if (simulation) simulation.alphaTarget(0); }, 800);
 }
 
 function highlightGraphNode(id) {
