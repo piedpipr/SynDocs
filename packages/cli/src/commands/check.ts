@@ -60,7 +60,7 @@ export async function runCheck(opts: CheckOptions): Promise<number> {
     const langConfig = getLangConfig(relPath);
     if (!langConfig) continue;
 
-    const anchors = parseAnchors(content, langConfig);
+    const anchors = parseAnchors(content, langConfig, { graphAdapter: adapter, filePath: relPath });
     if (anchors.length === 0) continue;
 
     const mirrorRel = getMirrorPath(relPath, config.docsRoot);
@@ -98,16 +98,7 @@ export async function runCheck(opts: CheckOptions): Promise<number> {
       for (const anchor of microAnchors) {
         const label = anchor.label!;
         const nextAnchor = anchors.find(a => a.lineIndex > anchor.lineIndex);
-        
-        // Scope resolution with GraphAdapter if CodeGraph active
-        if (adapter && anchor.autoScoped && anchor.scopeStartLine === undefined) {
-           const boundary = adapter.getNextNode(absPath, anchor.lineIndex + 1);
-           if (boundary) {
-             anchor.scopeStartLine = boundary.startLine - 1;
-             anchor.scopeEndLine = boundary.endLine;
-           }
-        }
-        
+
         const microCode = extractMicroDocCode(content, anchor, nextAnchor?.lineIndex);
         const currentHash = computeHash(microCode);
 
@@ -187,7 +178,7 @@ export async function runCheck(opts: CheckOptions): Promise<number> {
       const sourceContent = readFileSafe(sourceAbs);
       const langConfig = getLangConfig(sourceRel);
       if (sourceContent && langConfig) {
-        const anchors = parseAnchors(sourceContent, langConfig);
+        const anchors = parseAnchors(sourceContent, langConfig, { graphAdapter: adapter, filePath: sourceRel });
         const mirrorAbs = path.join(cwd, mirrorRel);
         const mirrorDoc = parseMirrorDoc(readFileSafe(mirrorAbs)!);
         

@@ -68,7 +68,7 @@ export async function runUpdate(opts: UpdateOptions): Promise<void> {
       continue;
     }
 
-    const anchors = parseAnchors(content, langConfig);
+    const anchors = parseAnchors(content, langConfig, { graphAdapter: adapter, filePath: relPath });
     if (anchors.length === 0) {
       if (targets.length > 0) {
         console.log('  ' + c.dim('skip') + '  ' + relPath + '  ' + c.dim('(no @syndocs marker)'));
@@ -124,15 +124,6 @@ export async function runUpdate(opts: UpdateOptions): Promise<void> {
       const microAnchors = anchors.filter(a => a.kind === 'micro' && a.label);
       for (const anchor of microAnchors) {
         const label = anchor.label!;
-        
-        // Scope resolution with GraphAdapter if CodeGraph active
-        if (adapter && anchor.autoScoped && anchor.scopeStartLine === undefined) {
-           const boundary = adapter.getNextNode(absPath, anchor.lineIndex + 1);
-           if (boundary) {
-             anchor.scopeStartLine = boundary.startLine - 1;
-             anchor.scopeEndLine = boundary.endLine;
-           }
-        }
 
         const nextAnchor = anchors.find(a => a.lineIndex > anchor.lineIndex);
         const microCode = extractMicroDocCode(content, anchor, nextAnchor?.lineIndex);
@@ -227,7 +218,7 @@ export async function runUpdate(opts: UpdateOptions): Promise<void> {
           const sourceContent = readFileSafe(sourceAbs);
           const langConfig = getLangConfig(sourceRel);
           if (sourceContent && langConfig) {
-            const anchors = parseAnchors(sourceContent, langConfig);
+            const anchors = parseAnchors(sourceContent, langConfig, { graphAdapter: adapter, filePath: sourceRel });
             if (!anchors.some(a => a.kind === 'whole-file')) {
               const mirrorDoc = parseMirrorDoc(readFileSafe(mirrorAbs)!);
               if (mirrorDoc.sections.some(s => s.kind === 'whole-file')) {

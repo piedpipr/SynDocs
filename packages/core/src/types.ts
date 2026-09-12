@@ -1,12 +1,19 @@
 // @syndocs
-// ─── Comment style variants ───────────────────────────────────────────────────
-
-export type CommentStyle = '//' | '#' | '--' | '<!--' | '/*';
+// ─── Language configuration ────────────────────────────────────────────────────
+//
+// Comment detection no longer works off a single hand-declared comment marker
+// per language (see anchor-parser.ts history) — it's driven by a real TextMate
+// grammar via the `tokenizer` module, which natively understands every comment
+// form a language has (//, /* */, docstrings, etc.) and correctly distinguishes
+// comments from strings/regex literals. `grammarId` is the shiki/TextMate
+// grammar to tokenize with; `codeBlock` remains the label used in rendered
+// markdown fences (```ts, ```py, ...), which is a separate, cosmetic concern.
 
 export interface LanguageConfig {
-  style: CommentStyle;
-  closeStyle?: '-->'; // only for HTML-style comments
-  codeBlock: string;  // the language hint used in fenced code blocks
+  /** shiki bundled-language id used to tokenize this file for comment detection */
+  grammarId: string;
+  /** the language hint used in fenced code blocks in generated markdown */
+  codeBlock: string;
 }
 
 // ─── Anchor markers found in source files ─────────────────────────────────────

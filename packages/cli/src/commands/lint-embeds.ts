@@ -40,7 +40,7 @@ export async function runLintEmbeds(opts: LintEmbedsOptions): Promise<number> {
       const sourceContent = readFileSafe(sourceAbs);
       const langConfig    = getLangConfig(embed.targetPath);
       if (sourceContent && langConfig) {
-        const anchors = parseAnchors(sourceContent, langConfig);
+        const anchors = parseAnchors(sourceContent, langConfig, { filePath: embed.targetPath });
 
         if (embed.targetLabel) {
           const hasLabel = anchors.some(a => a.kind === 'micro' && a.label === embed.targetLabel);

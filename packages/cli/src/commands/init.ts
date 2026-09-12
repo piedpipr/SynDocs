@@ -117,7 +117,7 @@ Run \`syndocs lint-embeds\` to validate all embed references!
     const langConfig = getLangConfig(relPath);
     if (!langConfig) continue;
 
-    const anchors = parseAnchors(content, langConfig);
+    const anchors = parseAnchors(content, langConfig, { graphAdapter: adapter, filePath: relPath });
     if (anchors.length === 0) continue;
 
     found++;
@@ -138,15 +138,6 @@ Run \`syndocs lint-embeds\` to validate all embed references!
     const microAnchors = anchors.filter(a => a.kind === 'micro' && a.label);
     
     for (const anchor of microAnchors) {
-      // Scope resolution with GraphAdapter if CodeGraph active
-      if (adapter && anchor.autoScoped && anchor.scopeStartLine === undefined) {
-         const boundary = adapter.getNextNode(absPath, anchor.lineIndex + 1);
-         if (boundary) {
-           anchor.scopeStartLine = boundary.startLine - 1;
-           anchor.scopeEndLine = boundary.endLine;
-         }
-      }
-
       const nextAnchor = anchors.find(a => a.lineIndex > anchor.lineIndex);
       const microCode = extractMicroDocCode(content, anchor, nextAnchor?.lineIndex);
       const microHash = computeHash(microCode);

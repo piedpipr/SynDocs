@@ -64,7 +64,7 @@ export async function runPrune(opts: PruneOptions): Promise<void> {
       const langConfig = getLangConfig(sourceRel);
       if (!sourceContent || !langConfig) continue;
       
-      const anchors = parseAnchors(sourceContent, langConfig);
+      const anchors = parseAnchors(sourceContent, langConfig, { filePath: sourceRel });
       const newSections: DocSection[] = [];
       let didChange = false;
 

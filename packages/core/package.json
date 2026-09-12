@@ -8,6 +8,9 @@
     "build": "tsc",
     "test": "node --test dist/tests/*.test.js"
   },
+  "dependencies": {
+    "shiki": "^4.4.3"
+  },
   "devDependencies": {
     "@types/node": "^26.5.0",
     "typescript": "^5.4.5"

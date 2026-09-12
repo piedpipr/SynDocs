@@ -3,6 +3,7 @@
 
 import path from 'path';
 import { loadConfig, parseCliArgs, c } from './utils';
+import { initTokenizer, getAllConfiguredGrammarIds } from '@syndocs/core';
 import { runInit }       from './commands/init';
 import { runCheck }      from './commands/check';
 import { runUpdate }     from './commands/update';
@@ -114,6 +115,24 @@ async function main(): Promise<void> {
     : parsed.flags.microdocs
       ? 'microdocs'
       : 'all';
+
+  // Comment/annotation detection (parseAnchors, called by the commands below)
+  // is backed by a TextMate grammar tokenizer that must be warmed up before
+  // any synchronous parseAnchors() call — see @syndocs/core's tokenizer.ts.
+  // Commands that never touch source files (install/auth/graph-link/serve's
+  // own request handling, etc.) skip this entirely so they stay instant.
+  const COMMANDS_NEEDING_TOKENIZER = new Set(['init', 'check', 'update', 'prune', 'tree', 'lint-embeds']);
+  if (COMMANDS_NEEDING_TOKENIZER.has(parsed.command)) {
+    try {
+      await initTokenizer(getAllConfiguredGrammarIds());
+    } catch (err) {
+      console.error(
+        c.red('Fatal:') + ' failed to initialize the syntax tokenizer used for @syndocs annotation ' +
+        'detection: ' + (err instanceof Error ? err.message : String(err)),
+      );
+      process.exit(1);
+    }
+  }
 
   switch (parsed.command) {
     case 'init': {

@@ -1,10 +1,16 @@
 // @syndocs
-import type { CommentStyle, LanguageConfig, ParsedAnchor } from './types';
+import type { LanguageConfig, ParsedAnchor } from './types';
+import type { GraphAdapterLike } from './graph-adapter-like';
 import { toKebabSlug, generateUniqueSlug } from './slug';
+import { extractCommentSpans, type CommentSpan } from './tokenizer';
 
-// ─── Declaration detection patterns (for structural fallback) ─────────────────
-// These regexes extract element name and kind from a declaration line.
-// They are intentionally broad — CodeGraph AST is preferred when available.
+// ─── Declaration detection patterns (regex fallback for structural scoping) ───
+// These regexes extract element name and kind from a declaration line. They
+// are intentionally broad and are used ONLY when no CodeGraph AST adapter is
+// available (see `resolveScopeBoundaries` / `ParseAnchorsOptions.graphAdapter`
+// below) — CodeGraph's AST is preferred whenever the project has it indexed,
+// since it knows real symbol boundaries instead of guessing from one line of
+// text. This table is the pre-existing fallback tier, kept as-is.
 
 const DECLARATION_PATTERNS: Array<{ re: RegExp; kind: string; nameGroup: number }> = [
   // TypeScript / JavaScript / Java / C# / Go / Rust / Swift / Kotlin
@@ -41,8 +47,21 @@ const DECLARATION_PATTERNS: Array<{ re: RegExp; kind: string; nameGroup: number 
   { re: /(\w+)\s*[:=]/,                                         kind: 'variable',  nameGroup: 1 },
 ];
 
-// Patterns for detecting single-line declarations (field, variable, constant)
-const SINGLE_LINE_KINDS = new Set(['variable', 'field', 'constant']);
+const ANCHOR_RE = /@(?:syndocs|synd)(?:\s*:\s*(\S+))?/;
+
+export interface ParseAnchorsOptions {
+  /**
+   * Optional CodeGraph adapter. When present and `.isReady()`, scope
+   * resolution (mapping an annotation to the function/class/etc. it
+   * documents) prefers real AST boundaries over the regex-based
+   * `DECLARATION_PATTERNS` fallback below. Comment/annotation DETECTION
+   * itself never depends on this — it always uses the grammar tokenizer —
+   * so `syndocs` works fully even when CodeGraph hasn't been indexed.
+   */
+  graphAdapter?: GraphAdapterLike | null;
+  /** Repo-relative or absolute path of the file being parsed, required to query graphAdapter. */
+  filePath?: string;
+}
 
 /**
  * Scan a source file's content for @syndocs/@synd anchor comments.
@@ -54,84 +73,58 @@ const SINGLE_LINE_KINDS = new Set(['variable', 'field', 'constant']);
  *  - Bare @synd above a code element produces an auto-scoped micro-doc block.
  *  - Inline @synd at end of a code line scopes to that line or block.
  *  - All micro-docs are embedded as sections within the parent mirror doc.
+ *
+ * Comment detection is delegated to `extractCommentSpans` (tokenizer.ts),
+ * which tokenizes the file with a real TextMate grammar so multi-line block
+ * comments, JSDoc-style headers, and language-specific string/regex syntax
+ * are all handled correctly — see tokenizer.ts's file header for the full
+ * rationale. If tokenization fails for this file for any reason (unexpected
+ * grammar edge case, unsupported language snuck through, etc.), we fall back
+ * to a conservative single-line scanner so one problematic file can't take
+ * down an entire `syndocs check`/`update` run — see `scanCommentsFallback`.
  */
-/**
- * Locate a comment on `line` that is NOT inside a string literal.
- * Skips comment markers that occur inside single quotes, double quotes, or backticks.
- */
-function findRealComment(
-  line: string,
-  style: CommentStyle,
-  closeStyle?: string,
-): { isFullLine: boolean; commentText: string } | null {
-  let inQuote: string | null = null;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (inQuote) {
-      if (ch === '\\') {
-        i++; // skip escaped char (backslash escapes the next character)
-        continue;
-      }
-      if (ch === inQuote) {
-        inQuote = null;
-      }
-      continue;
-    }
-
-    if (ch === '"' || ch === "'" || ch === '`') {
-      inQuote = ch;
-      continue;
-    }
-
-    if (line.startsWith(style, i)) {
-      const before = line.slice(0, i);
-      let commentText = line.slice(i + style.length);
-      if (closeStyle) {
-        const closeIdx = commentText.indexOf(closeStyle);
-        if (closeIdx !== -1) {
-          commentText = commentText.slice(0, closeIdx);
-        }
-      }
-      return {
-        isFullLine: before.trim().length === 0,
-        commentText,
-      };
-    }
-  }
-  return null;
-}
-
 // @synd: parse-anchors
 export function parseAnchors(
   content: string,
   langConfig: LanguageConfig,
+  options: ParseAnchorsOptions = {},
 ): ParsedAnchor[] {
   const lines = content.split('\n');
   const anchors: ParsedAnchor[] = [];
   const seenLabels = new Set<string>();
   let hasWholeFile = false;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+  let spans: CommentSpan[];
+  try {
+    spans = extractCommentSpans(content, langConfig.grammarId);
+  } catch (err) {
+    process.stderr.write(
+      `[syndocs] Warning: grammar tokenization failed for this file (${(err as Error).message}); ` +
+      `falling back to a conservative single-line comment scan, which may miss multi-line comments.\n`,
+    );
+    spans = scanCommentsFallback(lines);
+  }
 
-    const commentInfo = findRealComment(line, langConfig.style, langConfig.closeStyle);
-    if (!commentInfo) continue;
-
-    const anchorMatch = commentInfo.commentText.match(/^\s*@(?:syndocs|synd)(?:\s*:\s*(\S+))?/);
+  for (const span of spans) {
+    const anchorMatch = span.text.match(ANCHOR_RE);
     if (!anchorMatch) continue;
 
     const rawLabel = anchorMatch[1]; // may be undefined
+    const i = span.startLine;
+    // "Inline" means code precedes the comment on its start line — i.e. this
+    // comment is a trailing annotation, not a comment-only line/block.
+    const inline = !span.isFullLineStart;
 
-    // ── 1. Full-line annotation (comment-only line) ───────────────────
-    if (commentInfo.isFullLine) {
+    // ── 1. Full-line / comment-only annotation ─────────────────────────
+    if (!inline) {
       if (!rawLabel) {
         // Bare annotation — whole-file if first & near top, otherwise auto-scoped micro
         if (!hasWholeFile && isHeaderArea(lines, i)) {
           anchors.push({ kind: 'whole-file', lineIndex: i });
           hasWholeFile = true;
         } else {
-          // Auto-scoped micro-doc: scan next line for code element
-          const scope = resolveScopeBoundaries(lines, i, false);
+          // Auto-scoped micro-doc: scan the line(s) after the comment block for a code element
+          const scope = resolveScopeBoundaries(lines, span.endLine, false, options);
           const slug = scope
             ? generateUniqueSlug(toKebabSlug(scope.name), seenLabels)
             : generateUniqueSlug(`block-L${i + 1}`, seenLabels);
@@ -166,7 +159,7 @@ export function parseAnchors(
     // ── 2. Inline (trailing) annotation ───────────────────────────────
     if (!rawLabel) {
       // Inline bare: scope to the current line's code element
-      const scope = resolveScopeBoundaries(lines, i, true);
+      const scope = resolveScopeBoundaries(lines, i, true, options);
       const slug = scope
         ? generateUniqueSlug(toKebabSlug(scope.name), seenLabels)
         : generateUniqueSlug(`line-L${i + 1}`, seenLabels);
@@ -200,6 +193,37 @@ export function parseAnchors(
 }
 
 /**
+ * Conservative last-resort comment scanner used only if the real tokenizer
+ * throws for a given file. Deliberately simple and deliberately WORSE than
+ * the tokenizer (single-line `//`/`#`/`--` markers only, no block-comment or
+ * string-literal awareness) — it exists purely so one file's grammar failure
+ * degrades that one file gracefully instead of crashing the whole run. Any
+ * file that hits this path is logged (see caller) so it's never a silent
+ * accuracy regression.
+ */
+function scanCommentsFallback(lines: string[]): CommentSpan[] {
+  const spans: CommentSpan[] = [];
+  const markers = ['//', '#', '--'];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    for (const marker of markers) {
+      const idx = line.indexOf(marker);
+      if (idx === -1) continue;
+      const before = line.slice(0, idx);
+      spans.push({
+        startLine: i,
+        endLine: i,
+        startColumn: idx,
+        text: line.slice(idx),
+        isFullLineStart: before.trim().length === 0,
+      });
+      break;
+    }
+  }
+  return spans;
+}
+
+/**
  * Extract the source text "owned" by a micro-doc anchor.
  * Uses scope boundaries if available, otherwise falls back to
  * next-anchor or end-of-file.
@@ -223,7 +247,7 @@ export function extractMicroDocCode(
   return lines.slice(start, end).join('\n').trim();
 }
 
-// ─── Scope resolution (structural fallback) ───────────────────────────────────
+// ─── Scope resolution (AST-preferred, regex fallback) ─────────────────────────
 
 interface ScopeResult {
   name: string;
@@ -256,18 +280,59 @@ function isHeaderArea(lines: string[], lineIndex: number): boolean {
 /**
  * Resolve the scope boundaries for an annotation.
  *
- * For inline annotations: scope is the current line (or the block starting on that line).
- * For above-line annotations: scan the next non-blank line for a declaration.
+ * If a ready CodeGraph adapter + filePath were supplied, prefer real AST
+ * node boundaries: `getEnclosingScope`/`getNodeBoundary` for inline
+ * annotations (the code is on the same line as the comment), or
+ * `getNextNode` for above-line annotations (the declaration is the next AST
+ * node after the comment). Falls back to the regex-based
+ * `DECLARATION_PATTERNS` scan whenever the adapter is absent, not ready, or
+ * simply has no node at that location (e.g. annotation sits over a bare
+ * statement with no named symbol) — the regex path still adds value there.
  */
 function resolveScopeBoundaries(
   lines: string[],
   lineIndex: number,
   inline: boolean,
+  options: ParseAnchorsOptions,
 ): ScopeResult | null {
-  if (inline) {
-    return resolveInlineScope(lines, lineIndex);
+  const astResult = resolveScopeViaGraph(lineIndex, inline, options);
+  if (astResult) return astResult;
+
+  return inline
+    ? resolveInlineScope(lines, lineIndex)
+    : resolveAboveScope(lines, lineIndex);
+}
+
+function resolveScopeViaGraph(
+  lineIndex: number,
+  inline: boolean,
+  options: ParseAnchorsOptions,
+): ScopeResult | null {
+  const { graphAdapter, filePath } = options;
+  if (!graphAdapter || !filePath) return null;
+  if (!graphAdapter.isReady()) return null;
+
+  try {
+    // 1-based lines in CodeGraph's schema vs. our 0-based lineIndex.
+    const oneBasedLine = lineIndex + 1;
+
+    const node = inline
+      ? graphAdapter.getEnclosingScope(filePath, oneBasedLine) ?? graphAdapter.getNodeBoundary(filePath, oneBasedLine)
+      : graphAdapter.getNextNode(filePath, oneBasedLine + 1);
+
+    if (!node) return null;
+
+    return {
+      name: node.name,
+      kind: node.kind,
+      // Convert back to 0-based, exclusive-end to match ScopeResult's contract.
+      startLine: node.startLine - 1,
+      endLine: node.endLine,
+    };
+  } catch {
+    // Any adapter error (stale DB, schema drift, etc.) falls through to regex.
+    return null;
   }
-  return resolveAboveScope(lines, lineIndex);
 }
 
 /**
@@ -276,7 +341,12 @@ function resolveScopeBoundaries(
  */
 function resolveInlineScope(lines: string[], lineIndex: number): ScopeResult | null {
   const line = lines[lineIndex];
-  // Strip trailing comment to get the code portion
+  // Strip trailing comment to get the code portion. This is a best-effort
+  // strip for the regex fallback path only — the tokenizer already knows
+  // precisely where the comment starts, but by the time we're here we only
+  // have raw lines, so we re-derive it with the same broad patterns as
+  // before rather than threading the exact column through (kept simple
+  // since this is fallback-tier code, not the primary detection path).
   const codePart = line.replace(/\s*\/\/\s*@(?:syndocs|synd).*$/, '')
                        .replace(/\s*#\s*@(?:syndocs|synd).*$/, '')
                        .replace(/\s*--\s*@(?:syndocs|synd).*$/, '')
@@ -311,11 +381,13 @@ function resolveInlineScope(lines: string[], lineIndex: number): ScopeResult | n
 
 /**
  * Resolve scope for an above-line annotation — scan the next line(s) for a declaration.
+ * `lineIndex` here is the last line of the annotation's comment block (its
+ * `endLine`), so this always starts scanning strictly after the comment.
  */
 function resolveAboveScope(lines: string[], lineIndex: number): ScopeResult | null {
   // Find the next non-blank, non-comment line
   let declLine = -1;
-  for (let i = lineIndex + 1; i < Math.min(lineIndex + 5, lines.length); i++) {
+  for (let i = lineIndex + 1; i < Math.min(lineIndex + 6, lines.length); i++) {
     const l = lines[i].trim();
     if (!l) continue;
     if (l.startsWith('//') || l.startsWith('#') || l.startsWith('/*') ||
