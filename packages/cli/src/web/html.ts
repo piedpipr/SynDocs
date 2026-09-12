@@ -2523,7 +2523,20 @@ function attachTokenListeners(codeEl, currentId) {
         stopThreadLoop();
       }
     });
-    span.addEventListener('click', () => openDoc(targetFile));
+    span.addEventListener('click', () => {
+      // A same-file reference (e.g. calling a sibling method) should scroll
+      // to that line in the current view, not re-open the doc we're already
+      // looking at — openDoc() fully clears and rebuilds doc-content, which
+      // would discard scroll position and flash the whole viewer for no
+      // reason. Same-file targets only started reaching this handler once
+      // getFileTokens() stopped excluding them (see adapter.ts), so this
+      // path was previously unreachable/untested.
+      if (targetFile === currentId) {
+        jumpToCodeLine(Number(line));
+      } else {
+        openDoc(targetFile);
+      }
+    });
   });
 }
 

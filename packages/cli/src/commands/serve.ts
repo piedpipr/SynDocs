@@ -406,9 +406,14 @@ async function buildData(cwd: string, config: SynDocsConfig): Promise<SynDocsDat
     const parts = sourceRel.split('/');
     const group = parts.length > 2 ? parts.slice(0, 2).join('/') : parts[0];
 
-    // Outbound AST tokens and downstream dependencies from CodeGraph
-    const tokens = adapter ? (adapter as any).getFileTokens?.(sourceRel) ?? [] : [];
-    const downstream = adapter ? adapter.getImpactRadius(sourceAbs) : [];
+    // Outbound AST tokens and downstream dependencies from CodeGraph.
+    // Gated on hasCodeGraph (adapter.isReady()), not just adapter truthiness
+    // — an adapter can be non-null but not ready (DB missing/empty/stale),
+    // in which case querying it would previously fail silently inside
+    // getFileTokens's try/catch and produce an empty tokens array
+    // indistinguishable from "CodeGraph has nothing to say about this file".
+    const tokens = hasCodeGraph ? (adapter as any).getFileTokens?.(sourceRel) ?? [] : [];
+    const downstream = hasCodeGraph ? adapter!.getImpactRadius(sourceAbs) : [];
 
     nodes.push({
       id: sourceRel,
@@ -532,8 +537,16 @@ async function buildData(cwd: string, config: SynDocsConfig): Promise<SynDocsDat
     }
   }
 
-  // 4. Incorporate all CodeGraph structural edges directly if ready
-  if (adapter && (adapter as any).getAllEdges) {
+  // 4. Incorporate all CodeGraph structural edges directly if ready.
+  // Was previously gated on `adapter && (adapter as any).getAllEdges` —
+  // truthy-checking the adapter and the method's existence, but never
+  // actually checking `hasCodeGraph`/`isReady()`. A non-null-but-not-ready
+  // adapter (DB present but empty/stale) would silently produce zero
+  // edges here, which starves the connected-files sidebar list entirely —
+  // and since thread lines are drawn TO entries in that list, an empty
+  // DATA.edges means threads have nothing to draw to even when in-code
+  // token highlighting (tokens, above) is working correctly.
+  if (hasCodeGraph && (adapter as any).getAllEdges) {
     try {
       const cgEdges = (adapter as any).getAllEdges();
       for (const e of cgEdges) {
@@ -545,8 +558,11 @@ async function buildData(cwd: string, config: SynDocsConfig): Promise<SynDocsDat
           symbol: e.sourceSymbol,
         });
       }
-    } catch {
-      /* ignore */
+    } catch (err) {
+      process.stderr.write(
+        `[syndocs] Warning: getAllEdges() failed while building the graph view: ` +
+        `${err instanceof Error ? err.message : String(err)}\n`,
+      );
     }
   }
 

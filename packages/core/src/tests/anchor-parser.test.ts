@@ -7,7 +7,7 @@ import { getLangConfig } from '../languages';
 import type { GraphAdapterLike, NodeBoundaryLike } from '../graph-adapter-like';
 
 before(async () => {
-  await initTokenizer(['typescript', 'javascript', 'python', 'css', 'html']);
+  await initTokenizer(['typescript', 'javascript', 'python', 'css', 'html', 'php', 'java']);
 });
 
 function anchors(content: string, filename: string) {
@@ -147,6 +147,68 @@ function b() {}
 `, 'x.ts');
   assert.equal(result.length, 1);
   assert.equal(result[0].label, 'dup');
+});
+
+test('inline anchor after a chained method CALL is not misidentified as a method declaration (regression)', () => {
+  // Reported bug: `$table->string(...)->default(...)` was misread as
+  // declaring a method named "string" by a regex that matched any
+  // "identifier followed by (" with no check for a preceding `->`/`.`/`::`
+  // member-access operator.
+  const result = anchors(`
+class ExamResult extends Model {
+    protected $fillable = ['user_id'];
+
+    $table->string('exam_category', 30)->default('practice_set'); // @synd
+}
+`, 'x.php');
+  assert.equal(result.length, 1);
+  assert.equal(result[0].inline, true);
+  // No real declaration on this line -> generic line-based scope, NOT a
+  // fabricated method name.
+  assert.equal(result[0].elementKind, undefined);
+  assert.equal(result[0].elementName, undefined);
+  assert.match(result[0].label!, /^line-L\d+$/);
+});
+
+test('inline anchor after a JS method call (this.foo()) is not misidentified as a declaration', () => {
+  const result = anchors(`
+this.doSomething(x); // @synd
+`, 'x.ts');
+  assert.equal(result[0].elementName, undefined);
+});
+
+test('property assignment via -> is not misidentified as a variable declaration', () => {
+  const result = anchors(`
+$table->exam_category = 'practice_set'; // @synd
+`, 'x.php');
+  assert.equal(result[0].elementName, undefined);
+});
+
+test('genuine Java/C#-style typed method declaration (no fixed keyword) is still detected', () => {
+  const result = anchors(`
+public void calculateTotal() { // @synd
+  return;
+}
+`, 'x.java');
+  assert.equal(result[0].elementKind, 'method');
+  assert.equal(result[0].elementName, 'calculateTotal');
+});
+
+test('PHP "function" keyword declaration is still detected', () => {
+  const result = anchors(`
+class Foo {
+  private $x;
+
+  // @synd
+  public function getName() {
+    return $this->name;
+  }
+}
+`, 'x.php');
+  const micro = result.find(a => a.autoScoped);
+  assert.ok(micro, 'expected an auto-scoped micro anchor');
+  assert.equal(micro!.elementKind, 'function');
+  assert.equal(micro!.elementName, 'getName');
 });
 
 // ─── AST-preferred scope resolution ─────────────────────────────────────────

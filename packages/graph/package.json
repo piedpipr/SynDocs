@@ -5,7 +5,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "test": "node --no-warnings --test dist/tests/*.test.js"
   },
   "engines": {
     "node": ">=22.5.0"

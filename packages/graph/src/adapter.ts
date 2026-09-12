@@ -141,6 +141,17 @@ export class CodeGraphAdapter {
   /**
    * Precise AST outbound references for symbols/keywords in a specific source file.
    * Drives in-code token anchors and link thread lines.
+   *
+   * Unlike `getEdgesForFile` (which intentionally excludes same-file edges —
+   * they're meaningless in the file-level wiki-link graph), this method must
+   * INCLUDE same-file references: a call to a sibling method in the same
+   * class/file is exactly the kind of thing that should glow as an in-code
+   * token link. An earlier version of this query copied the
+   * `tn.file_path != sn.file_path` filter from `getEdgesForFile` without
+   * adjusting for this different purpose, which silently dropped same-file
+   * references from every rendered file — usually the majority of a file's
+   * outbound references — leaving thread-link highlighting looking broken
+   * or empty even when CodeGraph was indexed correctly.
    */
   getFileTokens(absOrRelPath: string): CodeTokenEdge[] {
     const rel = this._toRel(absOrRelPath);
@@ -157,12 +168,11 @@ export class CodeGraphAdapter {
         JOIN nodes sn ON e.source = sn.id
         JOIN nodes tn ON e.target = tn.id
         WHERE sn.file_path = ?
-          AND tn.file_path != ?
           AND e.kind IN ('calls', 'imports', 'extends', 'implements', 'references')
           AND e.line IS NOT NULL
         ORDER BY e.line ASC, e.col ASC
       `);
-      return (stmt.all(rel, rel) as any[]).map(r => ({
+      return (stmt.all(rel) as any[]).map(r => ({
         line:         Number(r.line),
         col:          Number(r.col),
         name:         String(r.name),
@@ -170,7 +180,17 @@ export class CodeGraphAdapter {
         targetFile:   String(r.target_file),
         targetSymbol: r.target_symbol != null ? String(r.target_symbol) : null,
       }));
-    } catch {
+    } catch (err) {
+      // Previously a silent `catch { return [] }` — logged now because a
+      // query failure here means EVERY file renders with zero token
+      // highlights, which is exactly the symptom being debugged, and a
+      // silent empty-array return is indistinguishable from "no tokens
+      // exist" vs. "the query broke". Still returns [] so a query failure
+      // degrades to "no highlights" rather than crashing the web UI.
+      process.stderr.write(
+        `[syndocs] Warning: getFileTokens query failed for "${rel}": ` +
+        `${err instanceof Error ? err.message : String(err)}\n`,
+      );
       return [];
     }
   }

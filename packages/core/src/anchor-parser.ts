@@ -20,7 +20,16 @@ const DECLARATION_PATTERNS: Array<{ re: RegExp; kind: string; nameGroup: number 
   { re: /(?:export\s+)?type\s+(\w+)\s*=/,                       kind: 'type',      nameGroup: 1 },
   { re: /(?:export\s+)?enum\s+(\w+)/,                           kind: 'enum',      nameGroup: 1 },
   { re: /(?:export\s+)?(?:const|let|var)\s+(\w+)\s*[=:]/,       kind: 'variable',  nameGroup: 1 },
-  { re: /(?:public|private|protected|static)?\s*(?:async\s+)?(\w+)\s*\(/,  kind: 'method', nameGroup: 1 },
+  // NOTE: bare "identifier followed by (" detection (Java/C#-style typed
+  // method declarations like `public void foo()`) is handled separately by
+  // `detectMethodCallLikeDeclaration` below, NOT as a DECLARATION_PATTERNS
+  // regex entry — a naive `(\w+)\s*\(` pattern here matched `$table->string(`
+  // as a method declaration named "string" (see the regression this fixed:
+  // an inline `// @synd` after `$table->string(...)->default(...)` was
+  // misidentified because nothing distinguished "declaring a method" from
+  // "calling one on an object"). The dedicated function below requires the
+  // identifier not be preceded by `.`, `->`, or `::`, and excludes common
+  // statement keywords, before treating it as a declaration.
   // Go
   { re: /func\s+(?:\(\w+\s+\*?\w+\)\s+)?(\w+)\s*\(/,           kind: 'function',  nameGroup: 1 },
   { re: /type\s+(\w+)\s+struct/,                                 kind: 'struct',    nameGroup: 1 },
@@ -44,7 +53,10 @@ const DECLARATION_PATTERNS: Array<{ re: RegExp; kind: string; nameGroup: number 
   // Kotlin
   { re: /(?:fun|val|var)\s+(\w+)/,                              kind: 'function',  nameGroup: 1 },
   // Generic single-line assignment (fallback for const X = ..., etc.)
-  { re: /(\w+)\s*[:=]/,                                         kind: 'variable',  nameGroup: 1 },
+  // Guarded against matching object property access (e.g. `$table->foo =`,
+  // `this.foo =`) as a variable declaration — same class of bug as the
+  // removed generic method pattern above (see detectMethodCallLikeDeclaration).
+  { re: /(?<![.\w]|->|::)(\w+)\s*[:=][^=]/,                     kind: 'variable',  nameGroup: 1 },
 ];
 
 const ANCHOR_RE = /@(?:syndocs|synd)(?:\s*:\s*(\S+))?/;
@@ -419,6 +431,12 @@ function resolveAboveScope(lines: string[], lineIndex: number): ScopeResult | nu
 
 /**
  * Try to detect the code element name and kind from a declaration line.
+ * Checks DECLARATION_PATTERNS first (keyword-anchored: function/class/def/
+ * fn/struct/etc — these can't be confused with a call or member access
+ * since they require a literal declaration keyword), then falls back to
+ * `detectMethodCallLikeDeclaration` for languages like Java/C# where a
+ * method declaration has no fixed keyword (`public void foo()`), which
+ * needs the extra guards below to avoid misreading a method *call* as one.
  */
 function detectElement(codeLine: string): { name: string; kind: string } | null {
   for (const pat of DECLARATION_PATTERNS) {
@@ -426,6 +444,51 @@ function detectElement(codeLine: string): { name: string; kind: string } | null 
     if (m && m[pat.nameGroup]) {
       return { name: m[pat.nameGroup], kind: pat.kind };
     }
+  }
+  return detectMethodCallLikeDeclaration(codeLine);
+}
+
+// Statement-leading keywords that can legitimately precede `identifier(`
+// without that identifier being a declaration — e.g. `if (isValid(x))`,
+// `return calculateTotal(x)`. Deliberately does NOT include type-keyword-like
+// words (e.g. `void`, `int`) since those precede a genuine declaration name
+// in Java/C#-style `public void foo()` and must NOT be excluded.
+const STATEMENT_KEYWORDS = new Set([
+  'if', 'while', 'for', 'switch', 'catch', 'return', 'new', 'else', 'foreach',
+  'typeof', 'instanceof', 'yield', 'throw', 'delete', 'await',
+]);
+
+/**
+ * Detect a bare `identifier(` declaration (Java/C#/Kotlin-style typed method
+ * declarations with no fixed keyword, e.g. `public void foo()`), while
+ * rejecting the shapes that are calls, not declarations:
+ *   - preceded by `.`, `->`, or `::` (member access: `$table->string(...)`,
+ *     `this.doSomething()`, `self::helper()`)
+ *   - the identifier itself, or the word immediately before it, is a
+ *     statement-leading keyword (`if (x())`, `return foo()`)
+ *   - it's a nested call argument (`if (isValid(x))` — the inner `isValid`
+ *     is directly preceded by `(`)
+ * This exists as a separate, more heavily guarded function (rather than one
+ * more entry in DECLARATION_PATTERNS) specifically because a single regex
+ * here previously matched `$table->string('x')->default('y')` as a method
+ * declaration named `string` — any future change to these rules should keep
+ * that case, and the DECLARATION_PATTERNS-keyword-anchored cases above it,
+ * covered by anchor-parser.test.ts.
+ */
+function detectMethodCallLikeDeclaration(codeLine: string): { name: string; kind: string } | null {
+  const re = /(?<![.\w]|->|::)([A-Za-z_]\w*)\s*\(/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(codeLine))) {
+    const name = m[1];
+    if (STATEMENT_KEYWORDS.has(name)) continue;
+
+    const before = codeLine.slice(0, m.index);
+    if (/\($/.test(before.trimEnd())) continue; // nested call argument
+
+    const prevWord = before.match(/([A-Za-z_]\w*)\s*$/);
+    if (prevWord && STATEMENT_KEYWORDS.has(prevWord[1])) continue;
+
+    return { name, kind: 'method' };
   }
   return null;
 }
