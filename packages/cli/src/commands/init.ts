@@ -109,6 +109,14 @@ Run \`syndocs lint-embeds\` to validate all embed references!
     const content = readFileSafe(absPath);
     if (!content) continue;
 
+    // Fast pre-scan: skip files that definitely have no @synd markers without
+    // paying for shiki tokenization + tree-sitter AST parsing (both are heavy
+    // operations). For a large Laravel project with hundreds of PHP files,
+    // calling parseAnchors on every file is what causes `syndocs init` to hang
+    // — the vast majority of files have no annotations and can be skipped in
+    // microseconds with a plain string search.
+    if (!content.includes('@synd')) continue;
+
     const langConfig = getLangConfig(relPath);
     if (!langConfig) continue;
 

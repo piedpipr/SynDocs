@@ -76,6 +76,10 @@ export async function runTree(opts: TreeOptions): Promise<void> {
     const langConfig = getLangConfig(relPath);
     if (!langConfig) continue;
 
+    // Fast pre-scan: skip files with no @synd markers before paying for
+    // shiki tokenization + tree-sitter AST parsing.
+    if (!content.includes('@synd')) continue;
+
     const anchors = parseAnchors(content, langConfig, { filePath: relPath });
     if (anchors.length === 0) continue;
 

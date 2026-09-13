@@ -63,6 +63,13 @@ export async function runUpdate(opts: UpdateOptions): Promise<void> {
       continue;
     }
 
+    // Fast pre-scan: skip files with no @synd markers before paying for
+    // shiki tokenization + tree-sitter AST parsing.
+    if (!content.includes('@synd')) {
+      skipped++;
+      continue;
+    }
+
     const anchors = parseAnchors(content, langConfig, { filePath: relPath });
     if (anchors.length === 0) {
       if (targets.length > 0) {
