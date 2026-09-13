@@ -428,6 +428,7 @@ code, kbd, samp, pre {
 /* ─── Header ───────────────────────────────────────────────────────────────── */
 #header {
   grid-column: 1 / -1;
+  grid-row: 1;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -601,6 +602,8 @@ code, kbd, samp, pre {
 
 /* ─── Sidebar ──────────────────────────────────────────────────────────────── */
 #sidebar {
+  grid-column: 1;
+  grid-row: 2;
   background: var(--bg-surface);
   border-right: 1px solid var(--border);
   display: flex;
@@ -718,6 +721,8 @@ code, kbd, samp, pre {
 
 /* ─── Content Panel ─────────────────────────────────────────────────────────── */
 #content-panel {
+  grid-column: 2;
+  grid-row: 2;
   overflow-y: auto;
   position: relative;
   background: var(--bg);
@@ -811,10 +816,8 @@ code, kbd, samp, pre {
   pointer-events: none;
   transition: opacity 0.2s;
 }
-#app.split-mode #edge-hint-left { display: block; left: 0; }
-#app.split-mode #edge-hint-right { display: block; right: 0; }
-#app.split-mode #sidebar.peek ~ #edge-hint-left,
-#app.split-mode #edge-hint-left.dim { opacity: 0; }
+#edge-hint-left.split-active { display: block; left: 0; }
+#edge-hint-right.split-active { display: block; right: 0; }
 
 #app.split-mode #sidebar {
   position: fixed;
@@ -1478,6 +1481,8 @@ code, kbd, samp, pre {
 
 /* ─── Right Graph Panel ─────────────────────────────────────────────────────── */
 #graph-panel {
+  grid-column: 3;
+  grid-row: 2;
   background: var(--bg-surface);
   border-left: 1px solid var(--border);
   display: flex;
@@ -1858,10 +1863,6 @@ code, kbd, samp, pre {
     <button id="toggle-graph" class="header-btn" onclick="toggleGraphPanel()" title="Toggle graph panel"><i class="fa-solid fa-diagram-project"></i> Graph</button>
   </header>
 
-  <!-- Edge hover zones for split-mode auto-hiding panels -->
-  <div id="edge-hint-left" aria-hidden="true"></div>
-  <div id="edge-hint-right" aria-hidden="true"></div>
-
   <!-- Left Sidebar -->
   <nav id="sidebar" aria-label="Documentation tree">
     <div class="sidebar-tabs">
@@ -1973,6 +1974,12 @@ code, kbd, samp, pre {
   </aside>
 </div>
 
+<!-- Edge hover zones for split-mode auto-hiding panels (outside #app's grid on purpose,
+     so they can never interfere with the grid's implicit auto-placement of header/
+     sidebar/content-panel/graph-panel). -->
+<div id="edge-hint-left" aria-hidden="true"></div>
+<div id="edge-hint-right" aria-hidden="true"></div>
+
 <script id="syndocs-data" type="application/json">__SYNDOCS_DATA__</script>
 <script>
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2066,6 +2073,8 @@ function applySplitMode(on, silent = false) {
   const btn = document.getElementById('toggle-split-mode');
   app.classList.toggle('split-mode', on);
   if (btn) btn.classList.toggle('active', on);
+  document.getElementById('edge-hint-left').classList.toggle('split-active', on);
+  document.getElementById('edge-hint-right').classList.toggle('split-active', on);
 
   if (on) {
     setupEdgeHover();
@@ -2095,18 +2104,24 @@ function setupEdgeHover() {
   if (edgeHoverHandler) return;
   const sidebar = document.getElementById('sidebar');
   const graphPanel = document.getElementById('graph-panel');
+  // Hysteresis: the show-threshold (24px) is smaller than the hide-threshold
+  // (56px), so once a panel peeks open, small mouse jitter near the edge
+  // doesn't flicker it open/closed on every pixel of movement.
+  const SHOW_PX = SPLIT_EDGE_PEEK_PX;
+  const HIDE_PX = SPLIT_EDGE_PEEK_PX + 32;
   edgeHoverHandler = (e) => {
     if (!splitMode) return;
-    if (e.clientX <= SPLIT_EDGE_PEEK_PX || sidebar.contains(e.target)) {
-      sidebar.classList.add('peek');
-    } else {
-      sidebar.classList.remove('peek');
-    }
-    if (e.clientX >= window.innerWidth - SPLIT_EDGE_PEEK_PX || graphPanel.contains(e.target)) {
-      graphPanel.classList.add('peek');
-    } else {
-      graphPanel.classList.remove('peek');
-    }
+    const sidebarPeeked = sidebar.classList.contains('peek');
+    const sidebarShow = e.clientX <= SHOW_PX || sidebar.contains(e.target);
+    const sidebarHide = e.clientX > HIDE_PX && !sidebar.contains(e.target);
+    if (!sidebarPeeked && sidebarShow) sidebar.classList.add('peek');
+    else if (sidebarPeeked && sidebarHide) sidebar.classList.remove('peek');
+
+    const graphPeeked = graphPanel.classList.contains('peek');
+    const graphShow = e.clientX >= window.innerWidth - SHOW_PX || graphPanel.contains(e.target);
+    const graphHide = e.clientX < window.innerWidth - HIDE_PX && !graphPanel.contains(e.target);
+    if (!graphPeeked && graphShow) graphPanel.classList.add('peek');
+    else if (graphPeeked && graphHide) graphPanel.classList.remove('peek');
   };
   document.addEventListener('mousemove', edgeHoverHandler);
 }
