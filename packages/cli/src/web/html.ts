@@ -2366,9 +2366,12 @@ function buildHighlightedCodeHtml(code, tokens, language, microdocRegistry) {
     const hlLines = highlighted.split('\\n');
     const resultLines = hlLines.map((hlLine, idx) => {
       const lineNum = idx + 1;
-      // CodeGraph stores 0-based line numbers; display lines are 1-based (idx + 1).
-      // Use idx (0-based) for tokenMap lookup, not lineNum.
-      const lineTokens = tokenMap.get(idx) || [];
+      // CodeGraph stores 1-based line numbers (confirmed: threads worked at
+      // d6f8b52 with this lineNum lookup; a later commit switched to idx
+      // (0-based) under the incorrect assumption that CodeGraph was 0-based,
+      // which made tokenMap.get() miss every key and silently produce zero
+      // token highlights across all files).
+      const lineTokens = tokenMap.get(lineNum) || [];
       if (lineTokens.length === 0) return hlLine;
 
       let result = hlLine;

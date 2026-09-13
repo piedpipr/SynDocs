@@ -175,6 +175,13 @@ const GRAMMARS: Record<string, GrammarSpec> = {
       function_definition: 'function',
       method_declaration: 'method',
       class_declaration: 'class',
+      // `return new class extends Migration { ... }` — Laravel migrations and
+      // other PHP files using anonymous classes use this node type. Without it,
+      // upward AST walks from inside the anonymous class body (e.g. a
+      // $table->string() call) skip the anonymous class entirely and settle on
+      // the outer method_declaration, collapsing every inline @synd inside the
+      // Schema::create closure into the enclosing up()/down() function scope.
+      anonymous_class_declaration: 'class',
       property_declaration: 'field',
     },
   },

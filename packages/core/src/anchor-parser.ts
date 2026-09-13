@@ -203,32 +203,75 @@ export function parseAnchors(
 
 /**
  * Conservative last-resort comment scanner used only if the real tokenizer
- * throws for a given file. Deliberately simple and deliberately WORSE than
- * the tokenizer (single-line `//`/`#`/`--` markers only, no block-comment or
- * string-literal awareness) — it exists purely so one file's grammar failure
- * degrades that one file gracefully instead of crashing the whole run. Any
- * file that hits this path is logged (see caller) so it's never a silent
- * accuracy regression.
+ * throws for a given file. Single-line `//`/`#`/`--` markers only — no
+ * block-comment or string-literal awareness — but it DOES merge consecutive
+ * full-line comment runs that use the same marker into a single CommentSpan,
+ * matching the shape that the shiki-based extractor produces.
+ *
+ * Why merging matters: without it a `@synd` anchor on the last line of a
+ * multi-line `//` block arrives as a completely isolated single-line span,
+ * so the surrounding comment text is lost and scope resolution has nothing
+ * useful to work with. The old version (one span per line) made PHP migration
+ * files with a `// ... @synd` block header produce blank or mis-scoped
+ * micro-doc sections in the output.
+ *
+ * Merging rules (mirrors the shiki tokenizer's `isContinuationOfOpenRun`):
+ *   - The new line must immediately follow the open span (endLine === i − 1).
+ *   - Both lines must be full-line-start (no code before the marker).
+ *   - Both lines must use the same marker string.
+ * Inline trailing comments (code before the marker) are never merged — they
+ * are their own single-line span, exactly like the tokenizer produces.
  */
 function scanCommentsFallback(lines: string[]): CommentSpan[] {
   const spans: CommentSpan[] = [];
   const markers = ['//', '#', '--'];
+  let open: CommentSpan | null = null;
+  let openMarker: string | null = null;
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    let found = false;
+
     for (const marker of markers) {
       const idx = line.indexOf(marker);
       if (idx === -1) continue;
       const before = line.slice(0, idx);
-      spans.push({
-        startLine: i,
-        endLine: i,
-        startColumn: idx,
-        text: line.slice(idx),
-        isFullLineStart: before.trim().length === 0,
-      });
+      const isFull = before.trim().length === 0;
+
+      const canMerge =
+        open !== null &&
+        openMarker === marker &&
+        isFull &&
+        open.isFullLineStart &&
+        open.endLine === i - 1;
+
+      if (canMerge) {
+        open!.text += '\n' + line.slice(idx);
+        open!.endLine = i;
+      } else {
+        if (open) spans.push(open);
+        open = {
+          startLine: i,
+          endLine: i,
+          startColumn: idx,
+          text: line.slice(idx),
+          isFullLineStart: isFull,
+        };
+        openMarker = marker;
+      }
+
+      found = true;
       break;
     }
+
+    if (!found && open) {
+      spans.push(open);
+      open = null;
+      openMarker = null;
+    }
   }
+
+  if (open) spans.push(open);
   return spans;
 }
 
