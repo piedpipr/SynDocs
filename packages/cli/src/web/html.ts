@@ -25,7 +25,8 @@ export const HTML_TEMPLATE = `<!DOCTYPE html>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" id="hljs-theme-link" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -61,7 +62,7 @@ export const HTML_TEMPLATE = `<!DOCTYPE html>
   --sidebar-w: 290px;
   --graph-w: 400px;
   --header-h: 50px;
-  --radius: 10px;
+  --radius: 3px;
   --shadow: 0 8px 32px rgba(0,0,0,0.5);
 }
 
@@ -165,6 +166,136 @@ export const HTML_TEMPLATE = `<!DOCTYPE html>
   --thread-color: rgba(99, 102, 241, 0.6);
   --thread-active: rgba(79, 70, 229, 1);
   --shadow: 0 8px 32px rgba(0,0,0,0.12);
+}
+
+[data-theme="claude"] {
+  --bg: #faf9f5;
+  --bg-surface: #ffffff;
+  --bg-surface-2: #f4f0e6;
+  --bg-surface-hover: #ece5d4;
+  --border: #e2d9c4;
+  --border-focus: #bd5b3a;
+  --text: #2b2822;
+  --text-dim: #5a5348;
+  --text-muted: #8c8375;
+  --accent: #bd5b3a;
+  --accent-2: #a54e30;
+  --accent-hover: #a54e30;
+  --accent-glow: rgba(189, 91, 58, 0.12);
+  --accent-glow-strong: rgba(189, 91, 58, 0.26);
+  --ok: #4c7a52;
+  --ok-dim: rgba(76, 122, 82, 0.1);
+  --stale: #ab7a1f;
+  --stale-dim: rgba(171, 122, 31, 0.1);
+  --missing: #ab3d2b;
+  --missing-dim: rgba(171, 61, 43, 0.1);
+  --thread-color: rgba(189, 91, 58, 0.5);
+  --thread-active: rgba(165, 78, 48, 1);
+  --shadow: 0 8px 32px rgba(50,40,20,0.1);
+}
+
+[data-theme="vscode"] {
+  --bg: #1e1e1e;
+  --bg-surface: #252526;
+  --bg-surface-2: #2d2d30;
+  --bg-surface-hover: #37373d;
+  --border: #3c3c3c;
+  --border-focus: #007acc;
+  --text: #d4d4d4;
+  --text-dim: #bbbbbb;
+  --text-muted: #858585;
+  --accent: #007acc;
+  --accent-2: #0e639c;
+  --accent-hover: #1f9cf0;
+  --accent-glow: rgba(0, 122, 204, 0.18);
+  --accent-glow-strong: rgba(0, 122, 204, 0.35);
+  --ok: #89d185;
+  --ok-dim: rgba(137, 209, 133, 0.12);
+  --stale: #cca700;
+  --stale-dim: rgba(204, 167, 0, 0.12);
+  --missing: #f14c4c;
+  --missing-dim: rgba(241, 76, 76, 0.12);
+  --thread-color: rgba(0, 122, 204, 0.7);
+  --thread-active: rgba(31, 156, 240, 1);
+  --shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+
+[data-theme="visual-studio"] {
+  --bg: #ffffff;
+  --bg-surface: #f3f3f3;
+  --bg-surface-2: #ececec;
+  --bg-surface-hover: #e2e2e2;
+  --border: #d6d6d6;
+  --border-focus: #007acc;
+  --text: #1e1e1e;
+  --text-dim: #3b3b3b;
+  --text-muted: #6e6e6e;
+  --accent: #007acc;
+  --accent-2: #005a9e;
+  --accent-hover: #005a9e;
+  --accent-glow: rgba(0, 122, 204, 0.12);
+  --accent-glow-strong: rgba(0, 122, 204, 0.26);
+  --ok: #2b7d2b;
+  --ok-dim: rgba(43, 125, 43, 0.1);
+  --stale: #9d6b00;
+  --stale-dim: rgba(157, 107, 0, 0.1);
+  --missing: #a1260d;
+  --missing-dim: rgba(161, 38, 13, 0.1);
+  --thread-color: rgba(0, 122, 204, 0.55);
+  --thread-active: rgba(0, 90, 158, 1);
+  --shadow: 0 8px 32px rgba(0,0,0,0.1);
+}
+
+[data-theme="sublime"] {
+  --bg: #272822;
+  --bg-surface: #2f3129;
+  --bg-surface-2: #383930;
+  --bg-surface-hover: #46473c;
+  --border: #49493f;
+  --border-focus: #fd971f;
+  --text: #f8f8f2;
+  --text-dim: #cfcfc2;
+  --text-muted: #75715e;
+  --accent: #fd971f;
+  --accent-2: #f92672;
+  --accent-hover: #ffb454;
+  --accent-glow: rgba(253, 151, 31, 0.18);
+  --accent-glow-strong: rgba(253, 151, 31, 0.35);
+  --ok: #a6e22e;
+  --ok-dim: rgba(166, 226, 46, 0.12);
+  --stale: #e6db74;
+  --stale-dim: rgba(230, 219, 116, 0.12);
+  --missing: #f92672;
+  --missing-dim: rgba(249, 38, 114, 0.12);
+  --thread-color: rgba(253, 151, 31, 0.7);
+  --thread-active: rgba(255, 180, 84, 1);
+  --shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+
+[data-theme="dracula"] {
+  --bg: #282a36;
+  --bg-surface: #2f3242;
+  --bg-surface-2: #363948;
+  --bg-surface-hover: #414458;
+  --border: #44475a;
+  --border-focus: #bd93f9;
+  --text: #f8f8f2;
+  --text-dim: #d6d6e0;
+  --text-muted: #6272a4;
+  --accent: #bd93f9;
+  --accent-2: #ff79c6;
+  --accent-hover: #d0a8ff;
+  --accent-glow: rgba(189, 147, 249, 0.18);
+  --accent-glow-strong: rgba(189, 147, 249, 0.35);
+  --ok: #50fa7b;
+  --ok-dim: rgba(80, 250, 123, 0.12);
+  --stale: #f1fa8c;
+  --stale-dim: rgba(241, 250, 140, 0.12);
+  --missing: #ff5555;
+  --missing-dim: rgba(255, 85, 85, 0.12);
+  --thread-color: rgba(189, 147, 249, 0.7);
+  --thread-active: rgba(208, 168, 255, 1);
+  --shadow: 0 8px 32px rgba(0,0,0,0.5);
 }
 
 /* ─── Font Families & Palettes ───────────────────────────────────────────── */
@@ -324,7 +455,7 @@ code, kbd, samp, pre {
   padding: 2px 6px;
   background: var(--accent-glow);
   color: var(--accent-hover);
-  border-radius: 6px;
+  border-radius: 3px;
   border: 1px solid var(--accent-glow-strong);
   font-weight: 600;
   text-transform: uppercase;
@@ -336,7 +467,7 @@ code, kbd, samp, pre {
   font-size: 10.5px;
   font-weight: 600;
   padding: 3px 8px;
-  border-radius: 9999px;
+  border-radius: 4px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -355,7 +486,7 @@ code, kbd, samp, pre {
   width: 100%;
   background: var(--bg-surface-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 3px;
   color: var(--text);
   padding: 6px 12px 6px 30px;
   font-size: 12.5px;
@@ -377,7 +508,7 @@ code, kbd, samp, pre {
 .header-btn {
   background: var(--bg-surface-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 3px;
   color: var(--text-dim);
   padding: 5px 11px;
   cursor: pointer;
@@ -402,7 +533,7 @@ code, kbd, samp, pre {
   right: 0;
   background: var(--bg-surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 3px;
   padding: 8px;
   box-shadow: var(--shadow);
   z-index: 200;
@@ -416,7 +547,7 @@ code, kbd, samp, pre {
   align-items: center;
   gap: 10px;
   padding: 7px 10px;
-  border-radius: 7px;
+  border-radius: 3px;
   cursor: pointer;
   font-size: 12.5px;
   transition: background 0.12s;
@@ -428,7 +559,7 @@ code, kbd, samp, pre {
 .theme-swatch {
   width: 14px;
   height: 14px;
-  border-radius: 50%;
+  border-radius: 3px;
   flex-shrink: 0;
   border: 1px solid rgba(255,255,255,0.15);
 }
@@ -442,7 +573,7 @@ code, kbd, samp, pre {
   right: 0;
   background: var(--bg-surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 3px;
   padding: 8px;
   box-shadow: var(--shadow);
   z-index: 200;
@@ -456,7 +587,7 @@ code, kbd, samp, pre {
   flex-direction: column;
   gap: 2px;
   padding: 7px 10px;
-  border-radius: 7px;
+  border-radius: 3px;
   cursor: pointer;
   font-size: 12px;
   transition: background 0.12s;
@@ -521,7 +652,7 @@ code, kbd, samp, pre {
   cursor: pointer;
   font-size: 10.5px;
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: 3px;
   font-family: inherit;
 }
 .sidebar-toolbar-btn:hover { color: var(--text); background: var(--bg-surface-hover); }
@@ -532,7 +663,7 @@ code, kbd, samp, pre {
   padding: 6px 3px;
 }
 .tree-view-container::-webkit-scrollbar { width: 4px; }
-.tree-view-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.tree-view-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
 /* ─── Tree Nodes ───────────────────────────────────────────────────────────── */
 .tree-node { margin: 1px 0; font-size: 12px; }
@@ -541,7 +672,7 @@ code, kbd, samp, pre {
   align-items: center;
   gap: 5px;
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: 3px;
   cursor: pointer;
   user-select: none;
   transition: background 0.1s;
@@ -574,7 +705,7 @@ code, kbd, samp, pre {
 .tree-badge {
   font-size: 9.5px;
   padding: 1px 5px;
-  border-radius: 4px;
+  border-radius: 3px;
   font-weight: 600;
   flex-shrink: 0;
 }
@@ -594,7 +725,7 @@ code, kbd, samp, pre {
   flex-direction: column;
 }
 #content-panel::-webkit-scrollbar { width: 6px; }
-#content-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+#content-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
 #doc-header {
   padding: 18px 32px 14px;
@@ -636,7 +767,7 @@ code, kbd, samp, pre {
 .action-btn {
   background: var(--bg-surface-2);
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: 3px;
   color: var(--text-dim);
   padding: 6px 12px;
   cursor: pointer;
@@ -658,6 +789,87 @@ code, kbd, samp, pre {
   max-width: 960px;
   width: 100%;
 }
+#doc-content { display: none; flex-direction: column; min-width: 0; }
+#doc-content.visible { display: flex; }
+#doc-code-pane, #doc-docs-pane { min-width: 0; }
+
+/* ─── Split (Side-by-Side) Focus Mode ────────────────────────────────────────
+   Toggled via the header "Split View" button. Code moves to a left pane,
+   docs/notes move to a right pane (instead of stacking below the code), and
+   the doc tree + graph panel become edge-activated auto-hiding overlays so
+   the two reading panes get full width. */
+#app.split-mode { grid-template-columns: 0px 1fr 0px !important; }
+
+#edge-hint-left, #edge-hint-right {
+  display: none;
+  position: fixed;
+  top: var(--header-h);
+  bottom: 0;
+  width: 4px;
+  background: var(--accent-glow);
+  z-index: 85;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+#app.split-mode #edge-hint-left { display: block; left: 0; }
+#app.split-mode #edge-hint-right { display: block; right: 0; }
+#app.split-mode #sidebar.peek ~ #edge-hint-left,
+#app.split-mode #edge-hint-left.dim { opacity: 0; }
+
+#app.split-mode #sidebar {
+  position: fixed;
+  top: var(--header-h);
+  left: 0;
+  bottom: 0;
+  width: var(--sidebar-w);
+  z-index: 90;
+  transform: translateX(-100%);
+  transition: transform 0.2s ease;
+  box-shadow: 6px 0 28px rgba(0,0,0,0.35);
+}
+#app.split-mode #sidebar.peek { transform: translateX(0); }
+
+#app.split-mode #graph-panel {
+  position: fixed;
+  top: var(--header-h);
+  right: 0;
+  bottom: 0;
+  width: var(--graph-w);
+  z-index: 90;
+  transform: translateX(100%);
+  transition: transform 0.2s ease;
+  box-shadow: -6px 0 28px rgba(0,0,0,0.35);
+}
+#app.split-mode #graph-panel.peek { transform: translateX(0); }
+
+#app.split-mode #content-panel { overflow: hidden; }
+#app.split-mode #doc-body {
+  max-width: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+#app.split-mode #empty-state { flex: 1; }
+#app.split-mode #doc-content.visible {
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+#app.split-mode #doc-code-pane,
+#app.split-mode #doc-docs-pane {
+  height: 100%;
+  overflow-y: auto;
+  padding: 20px 26px;
+}
+#app.split-mode #doc-code-pane {
+  flex: 1 1 56%;
+  border-right: 1px solid var(--border);
+}
+#app.split-mode #doc-docs-pane { flex: 1 1 44%; }
+#app.split-mode #doc-header { padding-left: 26px; padding-right: 26px; }
 
 /* ─── Code Section ──────────────────────────────────────────────────────────── */
 .code-section-header {
@@ -683,7 +895,7 @@ code, kbd, samp, pre {
   padding: 3px 9px;
   background: var(--bg-surface-2);
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: 3px;
   cursor: pointer;
   color: var(--text-muted);
   user-select: none;
@@ -709,7 +921,7 @@ code, kbd, samp, pre {
   color: var(--text-muted);
   background: var(--bg-surface-2);
   padding: 2px 7px;
-  border-radius: 4px;
+  border-radius: 3px;
   z-index: 2;
   user-select: none;
   letter-spacing: 0.04em;
@@ -806,10 +1018,10 @@ code, kbd, samp, pre {
   text-shadow: 0 0 18px currentColor !important;
   box-shadow: 0 0 0 1px currentColor;
 }
-[data-theme="light"] .code-link.kind-calls    { color: #0369a1 !important; text-shadow: none; background: rgba(3,105,161,0.07); }
-[data-theme="light"] .code-link.kind-imports   { color: #c2410c !important; text-shadow: none; background: rgba(194,65,12,0.07); }
-[data-theme="light"] .code-link.kind-extends   { color: #7c3aed !important; text-shadow: none; background: rgba(124,58,237,0.07); }
-[data-theme="light"] .code-link.kind-references { color: #059669 !important; text-shadow: none; background: rgba(5,150,105,0.07); }
+[data-mode="light"] .code-link.kind-calls    { color: #0369a1 !important; text-shadow: none; background: rgba(3,105,161,0.07); }
+[data-mode="light"] .code-link.kind-imports   { color: #c2410c !important; text-shadow: none; background: rgba(194,65,12,0.07); }
+[data-mode="light"] .code-link.kind-extends   { color: #7c3aed !important; text-shadow: none; background: rgba(124,58,237,0.07); }
+[data-mode="light"] .code-link.kind-references { color: #059669 !important; text-shadow: none; background: rgba(5,150,105,0.07); }
 
 /* ─── Microdoc Annotation Links in Code ────────────────────────────────────── */
 .microdoc-link {
@@ -821,7 +1033,7 @@ code, kbd, samp, pre {
   color: #c084fc !important;
   background: rgba(192, 132, 252, 0.15);
   border: 1px solid rgba(192, 132, 252, 0.35);
-  border-radius: 4px;
+  border-radius: 3px;
   padding: 0 6px;
   font-size: 0.95em;
   text-shadow: 0 0 8px rgba(192, 132, 252, 0.5);
@@ -839,7 +1051,7 @@ code, kbd, samp, pre {
   font-size: 11px;
   opacity: 0.9;
 }
-[data-theme="light"] .microdoc-link {
+[data-mode="light"] .microdoc-link {
   color: #7c3aed !important;
   background: rgba(124, 58, 237, 0.1);
   border-color: rgba(124, 58, 237, 0.3);
@@ -875,7 +1087,7 @@ code, kbd, samp, pre {
   display: none;
   background: var(--bg-surface);
   border: 1px solid var(--accent);
-  border-radius: 10px;
+  border-radius: 3px;
   padding: 14px 16px;
   box-shadow: var(--shadow), 0 0 24px var(--accent-glow-strong);
   z-index: 300;
@@ -905,13 +1117,13 @@ code, kbd, samp, pre {
   color: var(--text-dim);
   background: var(--bg-surface-2);
   padding: 2px 7px;
-  border-radius: 4px;
+  border-radius: 3px;
   margin-left: auto;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 #microdoc-popover .mp-code-box {
-  border-radius: 6px;
+  border-radius: 3px;
   overflow: hidden;
   border: 1px solid var(--border);
   margin-bottom: 10px;
@@ -985,7 +1197,7 @@ code, kbd, samp, pre {
   background: var(--bg-surface);
   border: 1px solid var(--border);
   padding: 1px 7px;
-  border-radius: 4px;
+  border-radius: 3px;
 }
 .mc-toggle {
   margin-left: 0;
@@ -1003,7 +1215,7 @@ code, kbd, samp, pre {
   background: var(--bg-surface);
   color: var(--text-dim);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 3px;
   padding: 2px 7px;
   font-size: 10px;
   font-family: var(--font-mono);
@@ -1029,7 +1241,7 @@ code, kbd, samp, pre {
 .mc-code {
   background: var(--bg) !important;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: 3px;
   overflow-x: auto;
   font-family: var(--font-mono);
   font-size: 11.5px;
@@ -1070,7 +1282,7 @@ code, kbd, samp, pre {
   background: var(--bg-surface);
   backdrop-filter: blur(12px);
   border: 1px solid var(--border);
-  border-radius: 9px;
+  border-radius: 3px;
   padding: 10px 14px;
   font-size: 12px;
   box-shadow: var(--shadow);
@@ -1101,7 +1313,7 @@ code, kbd, samp, pre {
 }
 .diff-pre {
   background: var(--bg) !important;
-  border-radius: 6px;
+  border-radius: 3px;
   padding: 12px;
   font-size: 11.5px;
   overflow-x: auto;
@@ -1156,7 +1368,7 @@ code, kbd, samp, pre {
   min-height: 200px;
   background: var(--bg-surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 3px;
   padding: 14px;
   color: var(--text);
   font-family: var(--font-mono);
@@ -1200,13 +1412,13 @@ code, kbd, samp, pre {
   background: var(--bg-surface-2);
   border: 1px solid var(--border);
   padding: 0.15em 0.45em;
-  border-radius: 4px;
+  border-radius: 3px;
   color: var(--accent-hover);
 }
 .markdown-rendered pre {
   background: var(--bg-surface) !important;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 3px;
   padding: 14px 16px;
   overflow-x: auto;
   margin: 1em 0;
@@ -1225,7 +1437,7 @@ code, kbd, samp, pre {
   margin: 1em 0;
   color: var(--text-muted);
   background: var(--accent-glow);
-  border-radius: 0 6px 6px 0;
+  border-radius: 0;
   font-style: italic;
 }
 .markdown-rendered blockquote p { margin-bottom: 0; }
@@ -1292,7 +1504,7 @@ code, kbd, samp, pre {
 .graph-view-switch {
   display: flex;
   background: var(--bg-surface-2);
-  border-radius: 6px;
+  border-radius: 3px;
   padding: 2px;
   border: 1px solid var(--border);
 }
@@ -1302,7 +1514,7 @@ code, kbd, samp, pre {
   color: var(--text-muted);
   font-size: 11px;
   padding: 3px 9px;
-  border-radius: 4px;
+  border-radius: 3px;
   cursor: pointer;
   font-weight: 500;
   font-family: inherit;
@@ -1324,7 +1536,7 @@ code, kbd, samp, pre {
 .dir-toggle-group {
   display: flex;
   background: var(--bg-surface-2);
-  border-radius: 6px;
+  border-radius: 3px;
   padding: 2px;
   border: 1px solid var(--border);
   gap: 2px;
@@ -1336,7 +1548,7 @@ code, kbd, samp, pre {
   font-size: 10.5px;
   font-family: inherit;
   padding: 2px 7px;
-  border-radius: 4px;
+  border-radius: 3px;
   cursor: pointer;
   font-weight: 500;
   transition: all 0.12s;
@@ -1357,7 +1569,7 @@ code, kbd, samp, pre {
   color: var(--text-muted);
   background: var(--bg-surface-2);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: 3px;
   border: 1px solid var(--border);
   white-space: nowrap;
 }
@@ -1377,12 +1589,12 @@ code, kbd, samp, pre {
   padding: 10px;
 }
 #connected-list-container::-webkit-scrollbar { width: 4px; }
-#connected-list-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+#connected-list-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 .conn-item {
   padding: 10px 12px;
   background: var(--bg-surface-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 3px;
   margin-bottom: 7px;
   cursor: pointer;
   transition: all 0.15s;
@@ -1446,7 +1658,7 @@ code, kbd, samp, pre {
   appearance: none;
   width: 10px;
   height: 10px;
-  border-radius: 50%;
+  border-radius: 3px;
   background: var(--accent);
   cursor: pointer;
 }
@@ -1466,7 +1678,7 @@ code, kbd, samp, pre {
 .auth-card {
   background: var(--bg-surface);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 3px;
   padding: 26px;
   width: 370px;
   box-shadow: var(--shadow);
@@ -1477,7 +1689,7 @@ code, kbd, samp, pre {
   width: 100%;
   background: var(--bg-surface-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 3px;
   padding: 10px 12px;
   color: var(--text);
   font-size: 14px;
@@ -1517,7 +1729,7 @@ code, kbd, samp, pre {
 <!-- Microdoc Popover -->
 <div id="microdoc-popover" role="tooltip">
   <div class="mp-header">
-    <span style="font-size:14px">🏷️</span>
+    <span style="font-size:14px"><i class="fa-solid fa-tag"></i></span>
     <span class="mp-label" id="mp-label-text"></span>
     <span class="mp-kind" id="mp-kind-text"></span>
   </div>
@@ -1527,14 +1739,14 @@ code, kbd, samp, pre {
   <div class="mp-body markdown-rendered" id="mp-body-text"></div>
   <div class="mp-footer">
     <span>Click annotation to jump to section</span>
-    <span>↵</span>
+    <span><i class="fa-solid fa-turn-down fa-rotate-90"></i></span>
   </div>
 </div>
 
 <!-- Auth Modal -->
 <div id="auth-modal" role="dialog" aria-label="Authentication">
   <div class="auth-card">
-    <div class="auth-title">🔐 Unlock Web UI Editing</div>
+    <div class="auth-title"><i class="fa-solid fa-lock"></i> Unlock Web UI Editing</div>
     <div class="auth-desc">Enter your project access code to enable documentation editing. Configured in <code>.syndocs/auth.json</code>.</div>
     <input type="password" id="auth-code-input" class="auth-input" placeholder="Access code..." autocomplete="current-password">
     <div class="auth-actions">
@@ -1548,18 +1760,18 @@ code, kbd, samp, pre {
   <!-- Header -->
   <header id="header">
     <div id="logo" onclick="openHome()" title="SynDocs Home">
-      <span class="spark">⚡</span><span>Syn</span>Docs <span class="badge">Studio</span>
+      <span class="spark"><i class="fa-solid fa-bolt"></i></span><span>Syn</span>Docs <span class="badge">Studio</span>
     </div>
     <div id="stats"></div>
 
     <div id="search-wrapper">
-      <span class="search-icon">⌕</span>
+      <span class="search-icon"><i class="fa-solid fa-magnifying-glass"></i></span>
       <input id="search" type="text" placeholder="Search docs & code..." autocomplete="off" aria-label="Search documentation">
     </div>
 
     <div id="theme-picker-wrapper">
       <button class="header-btn" id="theme-picker-btn" title="Change theme" onclick="toggleThemePicker()">
-        🎨 Theme
+        <i class="fa-solid fa-palette"></i> Theme
       </button>
       <div id="theme-dropdown">
         <div class="theme-option" data-theme="midnight" onclick="applyTheme('midnight')">
@@ -1586,58 +1798,85 @@ code, kbd, samp, pre {
           <span class="theme-swatch" style="background:linear-gradient(135deg,#f8fafc,#6366f1)"></span>
           Light Studio
         </div>
+        <div class="theme-option" data-theme="claude" onclick="applyTheme('claude')">
+          <span class="theme-swatch" style="background:linear-gradient(135deg,#faf9f5,#bd5b3a)"></span>
+          Claude
+        </div>
+        <div class="theme-option" data-theme="vscode" onclick="applyTheme('vscode')">
+          <span class="theme-swatch" style="background:linear-gradient(135deg,#1e1e1e,#007acc)"></span>
+          VS Code Dark
+        </div>
+        <div class="theme-option" data-theme="visual-studio" onclick="applyTheme('visual-studio')">
+          <span class="theme-swatch" style="background:linear-gradient(135deg,#ffffff,#007acc)"></span>
+          Visual Studio
+        </div>
+        <div class="theme-option" data-theme="sublime" onclick="applyTheme('sublime')">
+          <span class="theme-swatch" style="background:linear-gradient(135deg,#272822,#fd971f)"></span>
+          Sublime Text
+        </div>
+        <div class="theme-option" data-theme="dracula" onclick="applyTheme('dracula')">
+          <span class="theme-swatch" style="background:linear-gradient(135deg,#282a36,#bd93f9)"></span>
+          Dracula
+        </div>
       </div>
     </div>
 
     <div id="font-picker-wrapper">
       <button class="header-btn" id="font-picker-btn" title="Change typography font palette" onclick="toggleFontPicker()">
-        🔤 <span id="current-font-label">Modern</span>
+        <i class="fa-solid fa-font"></i> <span id="current-font-label">Modern</span>
       </button>
       <div id="font-dropdown">
         <div class="font-option active" data-font="modern" onclick="applyFont('modern')">
-          <div class="font-option-title">⚡ Modern Studio</div>
+          <div class="font-option-title"><i class="fa-solid fa-bolt"></i> Modern Studio</div>
           <div class="font-option-preview">Inter + JetBrains Mono</div>
         </div>
         <div class="font-option" data-font="apple" onclick="applyFont('apple')">
-          <div class="font-option-title">🍎 Apple Typography</div>
+          <div class="font-option-title"><i class="fa-brands fa-apple"></i> Apple Typography</div>
           <div class="font-option-preview">SF Pro + SF Mono</div>
         </div>
         <div class="font-option" data-font="nerd" onclick="applyFont('nerd')">
-          <div class="font-option-title">💻 Nerd Fonts</div>
+          <div class="font-option-title"><i class="fa-solid fa-terminal"></i> Nerd Fonts</div>
           <div class="font-option-preview">JetBrains/Fira NF + Dev Glyphs</div>
         </div>
         <div class="font-option" data-font="geist" onclick="applyFont('geist')">
-          <div class="font-option-title">▲ Geist Modern</div>
+          <div class="font-option-title"><i class="fa-solid fa-play fa-rotate-270"></i> Geist Modern</div>
           <div class="font-option-preview">Geist Sans + Geist Mono</div>
         </div>
         <div class="font-option" data-font="editorial" onclick="applyFont('editorial')">
-          <div class="font-option-title">📖 Editorial Serif</div>
+          <div class="font-option-title"><i class="fa-solid fa-book-open"></i> Editorial Serif</div>
           <div class="font-option-preview">Newsreader Serif + JetBrains</div>
         </div>
       </div>
     </div>
 
     <button id="auth-toggle-btn" class="header-btn" title="Toggle edit mode">
-      <span id="auth-status-icon">🔒</span> <span id="auth-status-text">Read Only</span>
+      <span id="auth-status-icon"><i class="fa-solid fa-lock"></i></span> <span id="auth-status-text">Read Only</span>
     </button>
-    <button id="toggle-graph" class="header-btn" onclick="toggleGraphPanel()" title="Toggle graph panel">◫ Graph</button>
+    <button id="toggle-split-mode" class="header-btn" onclick="toggleSplitMode()" title="Toggle side-by-side focus mode (auto-hiding tree &amp; graph)">
+      <i class="fa-solid fa-table-columns"></i> Split View
+    </button>
+    <button id="toggle-graph" class="header-btn" onclick="toggleGraphPanel()" title="Toggle graph panel"><i class="fa-solid fa-diagram-project"></i> Graph</button>
   </header>
+
+  <!-- Edge hover zones for split-mode auto-hiding panels -->
+  <div id="edge-hint-left" aria-hidden="true"></div>
+  <div id="edge-hint-right" aria-hidden="true"></div>
 
   <!-- Left Sidebar -->
   <nav id="sidebar" aria-label="Documentation tree">
     <div class="sidebar-tabs">
       <div class="sidebar-tab active" id="tab-docs" onclick="switchSidebarTab('docs')" role="tab">
-        📄 Docs
+        <i class="fa-solid fa-file-lines"></i> Docs
       </div>
       <div class="sidebar-tab" id="tab-codebase" onclick="switchSidebarTab('codebase')" role="tab">
-        💻 Code
+        <i class="fa-solid fa-code"></i> Code
       </div>
     </div>
     <div class="sidebar-toolbar">
       <span id="tree-counter">Loading...</span>
       <div>
-        <button class="sidebar-toolbar-btn" onclick="expandAllTree()" title="Expand all">⊞</button>
-        <button class="sidebar-toolbar-btn" onclick="collapseAllTree()" title="Collapse all">⊟</button>
+        <button class="sidebar-toolbar-btn" onclick="expandAllTree()" title="Expand all"><i class="fa-solid fa-square-plus"></i></button>
+        <button class="sidebar-toolbar-btn" onclick="collapseAllTree()" title="Collapse all"><i class="fa-solid fa-square-minus"></i></button>
       </div>
     </div>
     <div class="tree-view-container" id="tree-view" role="tree"></div>
@@ -1655,25 +1894,28 @@ code, kbd, samp, pre {
       </div>
       <div class="doc-actions">
         <button id="edit-notes-btn" class="action-btn primary" onclick="toggleEditNotes()">
-          ✏️ Edit Notes
+          <i class="fa-solid fa-pen"></i> Edit Notes
         </button>
       </div>
     </div>
 
     <div id="doc-body">
       <div id="empty-state">
-        <div class="empty-icon">📚</div>
+        <div class="empty-icon"><i class="fa-solid fa-book"></i></div>
         <div class="empty-title">SynDocs Interactive Studio</div>
         <div class="empty-desc">
           Select a document from the sidebar or click any node in the graph to begin exploring your codebase documentation.
         </div>
         <div class="empty-actions">
-          <button class="action-btn primary" onclick="openDoc('guides/internal/quickstart.md')">⚡ Quickstart</button>
-          <button class="action-btn" onclick="openDoc('guides/internal/annotations.md')">🏷️ Annotations</button>
-          <button class="action-btn" onclick="openDoc('guides/internal/cli-reference.md')">🛠️ CLI Ref</button>
+          <button class="action-btn primary" onclick="openDoc('guides/internal/quickstart.md')"><i class="fa-solid fa-bolt"></i> Quickstart</button>
+          <button class="action-btn" onclick="openDoc('guides/internal/annotations.md')"><i class="fa-solid fa-tag"></i> Annotations</button>
+          <button class="action-btn" onclick="openDoc('guides/internal/cli-reference.md')"><i class="fa-solid fa-screwdriver-wrench"></i> CLI Ref</button>
         </div>
       </div>
-      <div id="doc-content" style="display:none;"></div>
+      <div id="doc-content">
+        <div id="doc-code-pane"></div>
+        <div id="doc-docs-pane"></div>
+      </div>
     </div>
   </main>
 
@@ -1682,16 +1924,16 @@ code, kbd, samp, pre {
     <div id="graph-header">
       <div class="graph-title">Codebase Graph</div>
       <div class="graph-view-switch">
-        <button class="switch-btn active" id="btn-view-canvas" onclick="setGraphView('canvas')">🕸️ Graph</button>
-        <button class="switch-btn" id="btn-view-list" onclick="setGraphView('list')">📋 Connected</button>
+        <button class="switch-btn active" id="btn-view-canvas" onclick="setGraphView('canvas')"><i class="fa-solid fa-diagram-project"></i> Graph</button>
+        <button class="switch-btn" id="btn-view-list" onclick="setGraphView('list')"><i class="fa-solid fa-list"></i> Connected</button>
       </div>
     </div>
 
     <div id="graph-filter-bar">
       <div class="dir-toggle-group" role="group" aria-label="Link direction">
-        <button class="dir-toggle-btn active" id="btn-dir-all" onclick="setLinkDirection('all')" title="Show all links (incoming & outgoing)">⇄ All</button>
-        <button class="dir-toggle-btn" id="btn-dir-incoming" onclick="setLinkDirection('incoming')" title="Show incoming links (files pointing to current file)">↙ Incoming</button>
-        <button class="dir-toggle-btn" id="btn-dir-outgoing" onclick="setLinkDirection('outgoing')" title="Show outgoing links (files this file points to)">↗ Outgoing</button>
+        <button class="dir-toggle-btn active" id="btn-dir-all" onclick="setLinkDirection('all')" title="Show all links (incoming & outgoing)"><i class="fa-solid fa-arrows-left-right"></i> All</button>
+        <button class="dir-toggle-btn" id="btn-dir-incoming" onclick="setLinkDirection('incoming')" title="Show incoming links (files pointing to current file)"><i class="fa-solid fa-arrow-left"></i> Incoming</button>
+        <button class="dir-toggle-btn" id="btn-dir-outgoing" onclick="setLinkDirection('outgoing')" title="Show outgoing links (files this file points to)"><i class="fa-solid fa-arrow-right"></i> Outgoing</button>
       </div>
       <span id="conn-count-badge" class="dir-badge">0 links</span>
     </div>
@@ -1705,19 +1947,19 @@ code, kbd, samp, pre {
     <div id="graph-footer">
       <div id="graph-physics">
         <div class="physics-row">
-          <label>⊕ Gravity</label>
+          <label><i class="fa-solid fa-down-long"></i> Gravity</label>
           <input type="range" class="physics-slider" id="slider-gravity" min="0" max="1" step="0.01" value="0.06"
             oninput="onPhysicsChange()">
           <span class="physics-val" id="val-gravity">0.06</span>
         </div>
         <div class="physics-row">
-          <label>↔ Charge</label>
+          <label><i class="fa-solid fa-bolt"></i> Charge</label>
           <input type="range" class="physics-slider" id="slider-charge" min="-600" max="-30" step="10" value="-280"
             oninput="onPhysicsChange()">
           <span class="physics-val" id="val-charge">-280</span>
         </div>
         <div class="physics-row">
-          <label>↦ Distance</label>
+          <label><i class="fa-solid fa-ruler-horizontal"></i> Distance</label>
           <input type="range" class="physics-slider" id="slider-dist" min="30" max="300" step="10" value="110"
             oninput="onPhysicsChange()">
           <span class="physics-val" id="val-dist">110</span>
@@ -1773,6 +2015,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   initFont();
   initLinkDirection();
+  initSplitMode();
   setupMarkdown();
   renderStats();
   renderSidebar();
@@ -1798,9 +2041,100 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// ─── Split (Side-by-Side) Focus Mode ──────────────────────────────────────────
+// Moves docs/notes to a right-hand pane next to the code (instead of stacked
+// below it) and turns the doc tree + graph panel into auto-hiding overlays
+// that peek in when the mouse nears the left/right screen edge.
+
+let splitMode = localStorage.getItem('syndocs_split_mode') === '1';
+let edgeHoverHandler = null;
+const SPLIT_EDGE_PEEK_PX = 24;
+
+function initSplitMode() {
+  applySplitMode(splitMode, true);
+}
+
+function toggleSplitMode() {
+  applySplitMode(!splitMode);
+}
+
+function applySplitMode(on, silent = false) {
+  splitMode = on;
+  localStorage.setItem('syndocs_split_mode', on ? '1' : '0');
+
+  const app = document.getElementById('app');
+  const btn = document.getElementById('toggle-split-mode');
+  app.classList.toggle('split-mode', on);
+  if (btn) btn.classList.toggle('active', on);
+
+  if (on) {
+    setupEdgeHover();
+  } else {
+    teardownEdgeHover();
+    document.getElementById('sidebar').classList.remove('peek');
+    document.getElementById('graph-panel').classList.remove('peek');
+  }
+
+  // The graph canvas is sized from its container's bounding box, which
+  // changes once the grid columns collapse/expand — rebuild after the
+  // 0.2s layout transition settles.
+  setTimeout(() => {
+    if (currentGraphView === 'canvas') buildGraph();
+    if (threadMode === 'always' && threadRafId) {
+      stopThreadLoop();
+      startThreadLoop();
+    }
+  }, 250);
+
+  if (!silent) {
+    // no-op placeholder for symmetry with other apply* functions
+  }
+}
+
+function setupEdgeHover() {
+  if (edgeHoverHandler) return;
+  const sidebar = document.getElementById('sidebar');
+  const graphPanel = document.getElementById('graph-panel');
+  edgeHoverHandler = (e) => {
+    if (!splitMode) return;
+    if (e.clientX <= SPLIT_EDGE_PEEK_PX || sidebar.contains(e.target)) {
+      sidebar.classList.add('peek');
+    } else {
+      sidebar.classList.remove('peek');
+    }
+    if (e.clientX >= window.innerWidth - SPLIT_EDGE_PEEK_PX || graphPanel.contains(e.target)) {
+      graphPanel.classList.add('peek');
+    } else {
+      graphPanel.classList.remove('peek');
+    }
+  };
+  document.addEventListener('mousemove', edgeHoverHandler);
+}
+
+function teardownEdgeHover() {
+  if (edgeHoverHandler) {
+    document.removeEventListener('mousemove', edgeHoverHandler);
+    edgeHoverHandler = null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // ─── Theme & Font Systems ────────────────────────────────────────────────────
 
-const THEMES = ['midnight', 'obsidian', 'nord', 'solarized', 'catppuccin', 'light'];
+const THEME_META = {
+  midnight:      { mode: 'dark',  hljs: 'atom-one-dark' },
+  obsidian:      { mode: 'dark',  hljs: 'monokai-sublime' },
+  nord:          { mode: 'dark',  hljs: 'nord' },
+  solarized:     { mode: 'dark',  hljs: 'solarized-dark' },
+  catppuccin:    { mode: 'dark',  hljs: 'dracula' },
+  light:         { mode: 'light', hljs: 'atom-one-light' },
+  claude:        { mode: 'light', hljs: 'stackoverflow-light' },
+  vscode:        { mode: 'dark',  hljs: 'vs2015' },
+  'visual-studio': { mode: 'light', hljs: 'vs' },
+  sublime:       { mode: 'dark',  hljs: 'monokai' },
+  dracula:       { mode: 'dark',  hljs: 'dracula' },
+};
+const THEMES = Object.keys(THEME_META);
 
 function initTheme() {
   applyTheme(currentTheme, true);
@@ -1809,8 +2143,17 @@ function initTheme() {
 function applyTheme(name, silent = false) {
   if (!THEMES.includes(name)) name = 'midnight';
   currentTheme = name;
+  const meta = THEME_META[name] || THEME_META.midnight;
   document.documentElement.setAttribute('data-theme', name);
+  document.documentElement.setAttribute('data-mode', meta.mode);
   localStorage.setItem('syndocs_theme', name);
+
+  // Swap the highlight.js syntax theme so code stays legible in both
+  // light and dark UI themes (light themes need a darker-text hljs style).
+  const hljsLink = document.getElementById('hljs-theme-link');
+  if (hljsLink) {
+    hljsLink.href = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/' + meta.hljs + '.min.css';
+  }
 
   // Update active state in dropdown
   document.querySelectorAll('.theme-option').forEach(opt => {
@@ -1907,15 +2250,15 @@ function checkAuthStatus() {
       .then(r => r.json())
       .then(res => {
         if (res.authenticated) {
-          icon.textContent = '🔓'; text.textContent = 'Edit Mode';
+          icon.innerHTML = '<i class="fa-solid fa-lock-open"></i>'; text.textContent = 'Edit Mode';
         } else {
           authToken = null;
           localStorage.removeItem('syndocs_auth_token');
-          icon.textContent = '🔒'; text.textContent = 'Read Only';
+          icon.innerHTML = '<i class="fa-solid fa-lock"></i>'; text.textContent = 'Read Only';
         }
       }).catch(() => {});
   } else {
-    icon.textContent = '🔒'; text.textContent = 'Read Only';
+    icon.innerHTML = '<i class="fa-solid fa-lock"></i>'; text.textContent = 'Read Only';
   }
 }
 
@@ -1977,11 +2320,11 @@ function renderStats() {
   const missing = DATA.nodes.filter(n => n.status === 'missing').length;
   const el = document.getElementById('stats');
   el.innerHTML = [
-    \`<span class="stat-pill ok">✓ \${ok}</span>\`,
-    stale ? \`<span class="stat-pill stale">~ \${stale}</span>\` : '',
-    missing ? \`<span class="stat-pill missing">! \${missing}</span>\` : ''
+    \`<span class="stat-pill ok"><i class="fa-solid fa-check"></i> \${ok}</span>\`,
+    stale ? \`<span class="stat-pill stale"><i class="fa-solid fa-wave-square"></i> \${stale}</span>\` : '',
+    missing ? \`<span class="stat-pill missing"><i class="fa-solid fa-triangle-exclamation"></i> \${missing}</span>\` : ''
   ].join('');
-  document.getElementById('graph-cg-badge').textContent = DATA.hasCodeGraph ? '⚡ CodeGraph' : 'Fallback';
+  document.getElementById('graph-cg-badge').innerHTML = DATA.hasCodeGraph ? '<i class="fa-solid fa-bolt"></i> CodeGraph' : 'Fallback';
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2029,12 +2372,12 @@ function buildDomTree(node, filter = '') {
   if (hasChildren) {
     const toggle = document.createElement('span');
     toggle.className = 'tree-toggle';
-    toggle.textContent = '▼';
+    toggle.innerHTML = '<i class="fa-solid fa-chevron-down"></i>';
     toggle.addEventListener('click', e => {
       e.stopPropagation();
       if (childrenContainer) {
         const collapsed = childrenContainer.classList.toggle('collapsed');
-        toggle.textContent = collapsed ? '▶' : '▼';
+        toggle.innerHTML = collapsed ? '<i class="fa-solid fa-chevron-right"></i>' : '<i class="fa-solid fa-chevron-down"></i>';
       }
     });
     row.appendChild(toggle);
@@ -2047,8 +2390,14 @@ function buildDomTree(node, filter = '') {
 
   const icon = document.createElement('span');
   icon.className = 'tree-icon';
-  const iconMap = { microdoc: '🏷️', guide: '📖', doc: '📄', file: '📄', dir: '📁' };
-  icon.textContent = iconMap[node.type] || '📄';
+  const iconMap = {
+    microdoc: '<i class="fa-solid fa-tag"></i>',
+    guide: '<i class="fa-solid fa-book-open"></i>',
+    doc: '<i class="fa-solid fa-file-lines"></i>',
+    file: '<i class="fa-solid fa-file-lines"></i>',
+    dir: '<i class="fa-solid fa-folder"></i>',
+  };
+  icon.innerHTML = iconMap[node.type] || '<i class="fa-solid fa-file-lines"></i>';
   row.appendChild(icon);
 
   const label = document.createElement('span');
@@ -2060,7 +2409,7 @@ function buildDomTree(node, filter = '') {
   if (node.status && node.status !== 'none') {
     const badge = document.createElement('span');
     badge.className = 'tree-badge ' + node.status;
-    badge.textContent = node.status === 'ok' ? '✓' : node.status === 'stale' ? '~' : '!';
+    badge.innerHTML = node.status === 'ok' ? '<i class="fa-solid fa-check"></i>' : node.status === 'stale' ? '<i class="fa-solid fa-wave-square"></i>' : '<i class="fa-solid fa-triangle-exclamation"></i>';
     badge.title = node.status;
     row.appendChild(badge);
   }
@@ -2071,7 +2420,7 @@ function buildDomTree(node, filter = '') {
       if (childrenContainer) {
         const collapsed = childrenContainer.classList.toggle('collapsed');
         const tog = row.querySelector('.tree-toggle');
-        if (tog) tog.textContent = collapsed ? '▶' : '▼';
+        if (tog) tog.innerHTML = collapsed ? '<i class="fa-solid fa-chevron-right"></i>' : '<i class="fa-solid fa-chevron-down"></i>';
       }
     });
   } else {
@@ -2095,12 +2444,12 @@ function nodeMatchesFilter(node, filter) {
 
 function expandAllTree() {
   document.querySelectorAll('.tree-children').forEach(c => c.classList.remove('collapsed'));
-  document.querySelectorAll('.tree-toggle').forEach(t => t.textContent = '▼');
+  document.querySelectorAll('.tree-toggle').forEach(t => t.innerHTML = '<i class="fa-solid fa-chevron-down"></i>');
 }
 
 function collapseAllTree() {
   document.querySelectorAll('.tree-children').forEach(c => c.classList.add('collapsed'));
-  document.querySelectorAll('.tree-toggle').forEach(t => t.textContent = '▶');
+  document.querySelectorAll('.tree-toggle').forEach(t => t.innerHTML = '<i class="fa-solid fa-chevron-right"></i>');
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2122,27 +2471,29 @@ function openDoc(id) {
   if (!doc) {
     document.getElementById('doc-header').style.display = 'none';
     document.getElementById('empty-state').style.display = 'flex';
-    document.getElementById('doc-content').style.display = 'none';
+    document.getElementById('doc-content').classList.remove('visible');
     stopThreadLoop();
     return;
   }
 
   document.getElementById('empty-state').style.display = 'none';
   document.getElementById('doc-header').style.display = 'flex';
-  document.getElementById('doc-content').style.display = 'block';
+  document.getElementById('doc-content').classList.add('visible');
   document.getElementById('doc-path').textContent = doc.sourceFile;
   document.getElementById('doc-title-text').textContent = doc.title;
 
   const badge = document.getElementById('doc-status-badge');
   badge.className = 'tree-badge ' + (doc.status || 'dim');
-  badge.textContent = doc.status === 'ok' ? '✓ in sync' : doc.status === 'stale' ? '~ stale' : doc.status || '';
+  badge.innerHTML = doc.status === 'ok' ? '<i class="fa-solid fa-check"></i> in sync' : doc.status === 'stale' ? '<i class="fa-solid fa-wave-square"></i> stale' : doc.status || '';
 
   renderDocContent(doc, id);
 }
 
 function renderDocContent(doc, id) {
-  const container = document.getElementById('doc-content');
-  container.innerHTML = '';
+  const codePane = document.getElementById('doc-code-pane');
+  const docsPane = document.getElementById('doc-docs-pane');
+  codePane.innerHTML = '';
+  docsPane.innerHTML = '';
   currentMicrodocs = {};
 
   stopThreadLoop();
@@ -2173,10 +2524,10 @@ function renderDocContent(doc, id) {
     codeHeader.innerHTML =
       '<div class="code-section-title">Source Code (' + escapeHtml(doc.codeLanguage || 'code') + ')</div>' +
       '<div class="code-tools">' +
-        '<span class="tool-pill ' + (threadMode !== 'off' ? 'active' : '') + '" id="thread-mode-pill" onclick="cycleThreadMode(this)">⚡ Threads: ' + escapeHtml(threadMode) + '</span>' +
-        '<span class="tool-pill ' + (highlightKeywords ? 'active' : '') + '" id="highlight-pill" onclick="toggleHighlightKeywords(this)">💡 Links</span>' +
+        '<span class="tool-pill ' + (threadMode !== 'off' ? 'active' : '') + '" id="thread-mode-pill" onclick="cycleThreadMode(this)"><i class="fa-solid fa-bolt"></i> Threads: ' + escapeHtml(threadMode) + '</span>' +
+        '<span class="tool-pill ' + (highlightKeywords ? 'active' : '') + '" id="highlight-pill" onclick="toggleHighlightKeywords(this)"><i class="fa-solid fa-lightbulb"></i> Links</span>' +
       '</div>';
-    container.appendChild(codeHeader);
+    codePane.appendChild(codeHeader);
 
     const viewerBox = document.createElement('div');
     viewerBox.className = 'code-viewer-container';
@@ -2194,7 +2545,7 @@ function renderDocContent(doc, id) {
     codeEl.innerHTML = buildHighlightedCodeHtml(doc.codeCopy, doc.tokens || [], doc.codeLanguage || 'ts', currentMicrodocs);
     pre.appendChild(codeEl);
     viewerBox.appendChild(pre);
-    container.appendChild(viewerBox);
+    codePane.appendChild(viewerBox);
 
     // Collect thread spans
     allThreadSpans = [];
@@ -2212,20 +2563,20 @@ function renderDocContent(doc, id) {
     const diffBox = document.createElement('div');
     diffBox.className = 'diff-alert-box';
     diffBox.innerHTML =
-      '<div class="diff-alert-title">⚠ Code drift detected (pending update)</div>' +
+      '<div class="diff-alert-title"><i class="fa-solid fa-triangle-exclamation"></i> Code drift detected (pending update)</div>' +
       '<pre class="diff-pre">' + formatDiffLines(diffMatch[1]) + '</pre>';
-    container.appendChild(diffBox);
+    codePane.appendChild(diffBox);
   }
 
-  // ── 3. Notes & Editor (Full File Documentation Notes — placed right after code) ──
+  // ── 3. Notes & Editor (Full File Documentation Notes — shown alongside code) ──
   const notesContainer = document.createElement('div');
   notesContainer.className = 'notes-container';
 
   const notesHeader = document.createElement('div');
   notesHeader.className = 'notes-header';
   notesHeader.innerHTML =
-    '<div class="notes-title">📝 Documentation Notes</div>' +
-    '<button class="action-btn" id="edit-notes-toggle-btn" onclick="toggleEditNotes()">✏️ Edit Notes</button>';
+    '<div class="notes-title"><i class="fa-solid fa-note-sticky"></i> Documentation Notes</div>' +
+    '<button class="action-btn" id="edit-notes-toggle-btn" onclick="toggleEditNotes()"><i class="fa-solid fa-pen"></i> Edit Notes</button>';
   notesContainer.appendChild(notesHeader);
 
   const notesView = document.createElement('div');
@@ -2241,12 +2592,12 @@ function renderDocContent(doc, id) {
   editorBox.innerHTML =
     '<textarea id="notes-textarea" class="editor-textarea" placeholder="Write documentation notes in Markdown...">' + escapeHtml(doc.notes || '') + '</textarea>' +
     '<div class="editor-buttons">' +
-      '<button class="action-btn primary" onclick="saveNotes()">💾 Save Notes</button>' +
+      '<button class="action-btn primary" onclick="saveNotes()"><i class="fa-solid fa-floppy-disk"></i> Save Notes</button>' +
       '<button class="action-btn" onclick="toggleEditNotes()">Cancel</button>' +
       '<span id="save-indicator" style="font-size:12px; color:var(--text-muted); margin-left:8px;"></span>' +
     '</div>';
   notesContainer.appendChild(editorBox);
-  container.appendChild(notesContainer);
+  docsPane.appendChild(notesContainer);
 
   // ── 4. Connections Table ───────────────────────────────────────────────────
   const connections = extractConnections(doc.content || '');
@@ -2254,14 +2605,14 @@ function renderDocContent(doc, id) {
     const connSection = document.createElement('div');
     connSection.className = 'connections-section';
     connSection.innerHTML = renderConnectionTable(connections);
-    container.appendChild(connSection);
+    docsPane.appendChild(connSection);
   }
 
   // ── 5. Microdoc Cards (Annotations) ────────────────────────────────────────
   if (microEntries.length > 0) {
     const microSection = document.createElement('div');
     microSection.className = 'microdocs-section';
-    microSection.innerHTML = '<div class="microdocs-section-title">🏷️ Annotations (' + microEntries.length + ')</div>';
+    microSection.innerHTML = '<div class="microdocs-section-title"><i class="fa-solid fa-tag"></i> Annotations (' + microEntries.length + ')</div>';
 
     for (const { id: mId, label, entry } of microEntries) {
       const card = document.createElement('div');
@@ -2283,18 +2634,16 @@ function renderDocContent(doc, id) {
       }
 
       const jumpBtn = targetLine ?
-        '<button class="mc-jump-btn" title="Jump to line in source code" onclick="event.stopPropagation(); jumpToCodeLine(' + targetLine + ')">↑ Line ' + targetLine + '</button>' : '';
+        '<button class="mc-jump-btn" title="Jump to line in source code" onclick="event.stopPropagation(); jumpToCodeLine(' + targetLine + ')"><i class="fa-solid fa-arrow-up"></i> Line ' + targetLine + '</button>' : '';
 
       header.innerHTML =
-        '<span class="mc-glyph">🏷️</span>' +
+        '<span class="mc-glyph"><i class="fa-solid fa-tag"></i></span>' +
         '<span class="mc-label">#' + escapeHtml(label) + '</span>' +
         kindBadge +
         jumpBtn +
-        '<span class="mc-toggle">▼</span>';
+        '<span class="mc-toggle"><i class="fa-solid fa-chevron-right"></i></span>';
       header.addEventListener('click', () => {
         card.classList.toggle('expanded');
-        const toggle = header.querySelector('.mc-toggle');
-        if (toggle) toggle.textContent = card.classList.contains('expanded') ? '▼' : '▶';
       });
 
       const body = document.createElement('div');
@@ -2467,7 +2816,7 @@ function addMicrodocHighlights(highlightedHtml, rawCode, microdocRegistry) {
 
     const badgeHtml =
       '<span class="microdoc-link" data-microdoc="' + escapedLabel + '" title="Microdoc: #' + escapedLabel + '">' +
-        '<span class="m-glyph">🏷️</span>' + escapedText +
+        '<span class="m-glyph"><i class="fa-solid fa-tag"></i></span>' + escapedText +
       '</span>';
 
     if (line.includes(escapedText)) {
@@ -2475,7 +2824,7 @@ function addMicrodocHighlights(highlightedHtml, rawCode, microdocRegistry) {
     } else if (line.includes(annotText)) {
       return line.replace(annotText, badgeHtml);
     }
-    return line + ' <span class="microdoc-link" data-microdoc="' + escapedLabel + '"><span class="m-glyph">🏷️</span>#' + escapedLabel + '</span>';
+    return line + ' <span class="microdoc-link" data-microdoc="' + escapedLabel + '"><span class="m-glyph"><i class="fa-solid fa-tag"></i></span>#' + escapedLabel + '</span>';
   }).join('\\n');
 }
 
@@ -2592,8 +2941,6 @@ function attachMicrodocListeners(codeEl) {
       const card = document.querySelector('.microdoc-card[data-label="' + CSS.escape(label) + '"]');
       if (card) {
         card.classList.add('expanded');
-        const toggle = card.querySelector('.mc-toggle');
-        if (toggle) toggle.textContent = '▼';
         card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         card.style.transition = 'box-shadow 0.25s';
         card.style.boxShadow = '0 0 0 2px var(--accent), 0 0 16px var(--accent-glow-strong)';
@@ -2746,7 +3093,7 @@ function cycleThreadMode(btn) {
   threadMode = modes[(idx + 1) % modes.length];
   localStorage.setItem('syndocs_thread_mode', threadMode);
 
-  btn.textContent = \`⚡ Threads: \${threadMode}\`;
+  btn.innerHTML = \`<i class="fa-solid fa-bolt"></i> Threads: \${threadMode}\`;
   btn.classList.toggle('active', threadMode !== 'off');
 
   if (threadMode === 'off') {
@@ -2783,13 +3130,13 @@ function toggleEditNotes() {
   if (isEditingNotes) {
     view.style.display = 'none';
     editor.style.display = 'flex';
-    if (btn) btn.textContent = '👁️ Preview';
-    if (subBtn) subBtn.textContent = '👁️ Preview';
+    if (btn) btn.innerHTML = '<i class="fa-solid fa-eye"></i> Preview';
+    if (subBtn) subBtn.innerHTML = '<i class="fa-solid fa-eye"></i> Preview';
   } else {
     view.style.display = 'block';
     editor.style.display = 'none';
-    if (btn) btn.textContent = '✏️ Edit Notes';
-    if (subBtn) subBtn.textContent = '✏️ Edit';
+    if (btn) btn.innerHTML = '<i class="fa-solid fa-pen"></i> Edit Notes';
+    if (subBtn) subBtn.innerHTML = '<i class="fa-solid fa-pen"></i> Edit';
   }
 }
 
@@ -2811,7 +3158,7 @@ function saveNotes() {
   .then(r => r.json())
   .then(res => {
     if (res.ok) {
-      ind.textContent = 'Saved ✓';
+      ind.innerHTML = 'Saved <i class="fa-solid fa-check"></i>';
       doc.notes = notes;
       const view = document.getElementById('notes-view');
       if (view) view.innerHTML = marked.parse(notes || '> _No notes yet._');
@@ -2925,11 +3272,11 @@ function updateConnectedList(docId) {
 
     let dirBadge = '';
     if (info.incomingCount > 0 && info.outgoingCount > 0) {
-      dirBadge = '<span class="tree-badge dim" style="color:var(--accent-hover); border-color:var(--accent-glow);">⇄ Two-way</span>';
+      dirBadge = '<span class="tree-badge dim" style="color:var(--accent-hover); border-color:var(--accent-glow);"><i class="fa-solid fa-arrows-left-right"></i> Two-way</span>';
     } else if (info.incomingCount > 0) {
-      dirBadge = '<span class="tree-badge dim" style="color:var(--calls); border-color:rgba(56,189,248,0.3);">↙ Incoming</span>';
+      dirBadge = '<span class="tree-badge dim" style="color:var(--calls); border-color:rgba(56,189,248,0.3);"><i class="fa-solid fa-arrow-left"></i> Incoming</span>';
     } else {
-      dirBadge = '<span class="tree-badge dim" style="color:var(--imports); border-color:rgba(251,146,60,0.3);">↗ Outgoing</span>';
+      dirBadge = '<span class="tree-badge dim" style="color:var(--imports); border-color:rgba(251,146,60,0.3);"><i class="fa-solid fa-arrow-right"></i> Outgoing</span>';
     }
 
     const edgePills = info.edges.slice(0, 4).map(e => {
