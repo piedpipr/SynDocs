@@ -405,7 +405,27 @@ function countLeaves(node) {
   return node.children.reduce((a, c) => a + countLeaves(c), 0);
 }
 
-function buildDomTree(node, filter = '') {
+// Children DOM for a collapsed directory is only built the first time it's
+// expanded, instead of eagerly recursing through the entire tree up front —
+// on a large real-world codebase (thousands of files) eagerly building every
+// descendant, including branches that start collapsed and are never looked
+// at, is the actual cause of the sidebar taking several seconds to render.
+// lazyChildData maps a not-yet-built .tree-children container to what it
+// needs to build itself on first expand.
+const lazyChildData = new WeakMap();
+const CHEVRON_DOWN = '<i class="fa-solid fa-chevron-down"></i>';
+const CHEVRON_RIGHT = '<i class="fa-solid fa-chevron-right"></i>';
+
+function ensureChildrenBuilt(childrenContainer) {
+  const data = lazyChildData.get(childrenContainer);
+  if (!data || data.built) return;
+  data.built = true;
+  for (const child of data.node.children) {
+    childrenContainer.appendChild(buildDomTree(child, data.filter, data.depth + 1));
+  }
+}
+
+function buildDomTree(node, filter = '', depth = 0) {
   const el = document.createElement('div');
   el.className = 'tree-node';
   const hasChildren = Boolean(node.children && node.children.length > 0);
@@ -415,21 +435,29 @@ function buildDomTree(node, filter = '') {
 
   if (filter && !nodeMatchesFilter(node, filter)) el.style.display = 'none';
 
+  // Root-level entries (depth 0) start expanded for immediate usability;
+  // everything nested deeper starts collapsed. A search filter forces
+  // everything open (and therefore built) so matches at any depth are
+  // reachable — lazy building only applies when browsing unfiltered.
+  const startCollapsed = hasChildren && depth > 0 && !filter;
+
   let childrenContainer = null;
   if (hasChildren) {
     childrenContainer = document.createElement('div');
-    childrenContainer.className = 'tree-children';
+    childrenContainer.className = 'tree-children' + (startCollapsed ? ' collapsed' : '');
+    lazyChildData.set(childrenContainer, { node, filter, depth, built: false });
   }
 
   if (hasChildren) {
     const toggle = document.createElement('span');
     toggle.className = 'tree-toggle';
-    toggle.innerHTML = '<i class="fa-solid fa-chevron-down"></i>';
+    toggle.innerHTML = startCollapsed ? CHEVRON_RIGHT : CHEVRON_DOWN;
     toggle.addEventListener('click', e => {
       e.stopPropagation();
       if (childrenContainer) {
+        ensureChildrenBuilt(childrenContainer);
         const collapsed = childrenContainer.classList.toggle('collapsed');
-        toggle.innerHTML = collapsed ? '<i class="fa-solid fa-chevron-right"></i>' : '<i class="fa-solid fa-chevron-down"></i>';
+        toggle.innerHTML = collapsed ? CHEVRON_RIGHT : CHEVRON_DOWN;
       }
     });
     row.appendChild(toggle);
@@ -464,15 +492,22 @@ function buildDomTree(node, filter = '') {
     badge.innerHTML = node.status === 'ok' ? '<i class="fa-solid fa-check"></i>' : node.status === 'stale' ? '<i class="fa-solid fa-wave-square"></i>' : '<i class="fa-solid fa-triangle-exclamation"></i>';
     badge.title = node.status;
     row.appendChild(badge);
+  } else if (node.type === 'file' && (!node.status || node.status === 'none')) {
+    const badge = document.createElement('span');
+    badge.className = 'tree-badge dim';
+    badge.title = 'No documentation yet — click to view and add docs';
+    badge.innerHTML = '<i class="fa-solid fa-circle-dot"></i>';
+    row.appendChild(badge);
   }
 
   if (node.type === 'dir') {
     row.addEventListener('click', e => {
       e.stopPropagation();
       if (childrenContainer) {
+        ensureChildrenBuilt(childrenContainer);
         const collapsed = childrenContainer.classList.toggle('collapsed');
         const tog = row.querySelector('.tree-toggle');
-        if (tog) tog.innerHTML = collapsed ? '<i class="fa-solid fa-chevron-right"></i>' : '<i class="fa-solid fa-chevron-down"></i>';
+        if (tog) tog.innerHTML = collapsed ? CHEVRON_RIGHT : CHEVRON_DOWN;
       }
     });
   } else {
@@ -480,8 +515,8 @@ function buildDomTree(node, filter = '') {
   }
 
   el.appendChild(row);
-  if (hasChildren && childrenContainer && node.children) {
-    for (const child of node.children) childrenContainer.appendChild(buildDomTree(child, filter));
+  if (hasChildren && childrenContainer) {
+    if (!startCollapsed) ensureChildrenBuilt(childrenContainer);
     el.appendChild(childrenContainer);
   }
   return el;
@@ -495,8 +530,22 @@ function nodeMatchesFilter(node, filter) {
 }
 
 function expandAllTree() {
-  document.querySelectorAll('.tree-children').forEach(c => c.classList.remove('collapsed'));
-  document.querySelectorAll('.tree-toggle').forEach(t => t.innerHTML = '<i class="fa-solid fa-chevron-down"></i>');
+  // Lazily-built branches need their DOM constructed before they can be
+  // shown, so walk container-by-container (building each one right before
+  // expanding it) rather than just toggling classes on whatever already
+  // happens to exist in the DOM.
+  function walk(container) {
+    ensureChildrenBuilt(container);
+    container.classList.remove('collapsed');
+    const toggle = container.previousSibling && container.previousSibling.querySelector
+      ? container.previousSibling.querySelector('.tree-toggle') : null;
+    if (toggle) toggle.innerHTML = CHEVRON_DOWN;
+    for (const child of container.children) {
+      const childContainer = child.querySelector(':scope > .tree-children');
+      if (childContainer) walk(childContainer);
+    }
+  }
+  document.querySelectorAll('#tree-view > .tree-node > .tree-children').forEach(walk);
 }
 
 function collapseAllTree() {
@@ -521,16 +570,20 @@ function openDoc(id) {
   updateConnectedList(id);
 
   if (!doc) {
-    document.getElementById('doc-header').style.display = 'none';
-    document.getElementById('empty-state').style.display = 'flex';
-    document.getElementById('doc-content').classList.remove('visible');
-    stopThreadLoop();
+    // No mirror doc for this id yet. If it's a real file in the codebase
+    // (browsing the "Code" tab, or a graph node with status:'none'), show
+    // its raw source with an inline "add documentation" prompt instead of
+    // just an empty state — this is what lets undocumented files actually
+    // be opened and annotated from the Web UI.
+    if (id) {
+      openUndocumentedFile(id);
+    } else {
+      showEmptyState();
+    }
     return;
   }
 
-  document.getElementById('empty-state').style.display = 'none';
-  document.getElementById('doc-header').style.display = 'flex';
-  document.getElementById('doc-content').classList.add('visible');
+  showEmptyState(false);
   document.getElementById('doc-path').textContent = doc.sourceFile;
   document.getElementById('doc-title-text').textContent = doc.title;
 
@@ -539,6 +592,133 @@ function openDoc(id) {
   badge.innerHTML = doc.status === 'ok' ? '<i class="fa-solid fa-check"></i> in sync' : doc.status === 'stale' ? '<i class="fa-solid fa-wave-square"></i> stale' : doc.status || '';
 
   renderDocContent(doc, id);
+}
+
+function showEmptyState(show = true) {
+  document.getElementById('empty-state').style.display = show ? 'flex' : 'none';
+  document.getElementById('doc-header').style.display = show ? 'none' : 'flex';
+  if (show) {
+    document.getElementById('doc-content').classList.remove('visible');
+    stopThreadLoop();
+  } else {
+    document.getElementById('doc-content').classList.add('visible');
+  }
+}
+
+// Guards against out-of-order responses: if the user clicks through several
+// undocumented files quickly, only the most recently requested one is
+// allowed to render once its fetch resolves.
+let undocFetchToken = 0;
+
+function openUndocumentedFile(id) {
+  const myToken = ++undocFetchToken;
+  fetch('/api/file/raw?path=' + encodeURIComponent(id))
+    .then(r => r.json())
+    .then(res => {
+      if (myToken !== undocFetchToken) return;
+      if (!res.ok) { showEmptyState(); return; }
+      renderUndocumentedFile(id, res);
+    })
+    .catch(() => { if (myToken === undocFetchToken) showEmptyState(); });
+}
+
+function renderUndocumentedFile(id, fileData) {
+  showEmptyState(false);
+
+  const parts = id.split('/');
+  document.getElementById('doc-path').textContent = id;
+  document.getElementById('doc-title-text').textContent = parts[parts.length - 1];
+
+  const badge = document.getElementById('doc-status-badge');
+  badge.className = 'tree-badge dim';
+  badge.innerHTML = '<i class="fa-solid fa-circle-dot"></i> undocumented';
+
+  const codePane = document.getElementById('doc-code-pane');
+  const docsPane = document.getElementById('doc-docs-pane');
+  codePane.innerHTML = '';
+  docsPane.innerHTML = '';
+  currentMicrodocs = {};
+  allThreadSpans = [];
+  stopThreadLoop();
+
+  const codeHeader = document.createElement('div');
+  codeHeader.className = 'code-section-header';
+  codeHeader.innerHTML = '<div class="code-section-title">Source Code (' + escapeHtml(fileData.language || 'code') + ')</div>';
+  codePane.appendChild(codeHeader);
+
+  const viewerBox = document.createElement('div');
+  viewerBox.className = 'code-viewer-container';
+  const langBadge = document.createElement('div');
+  langBadge.className = 'code-lang-badge';
+  langBadge.textContent = (fileData.language || 'code').toUpperCase();
+  viewerBox.appendChild(langBadge);
+
+  const pre = document.createElement('pre');
+  pre.className = 'code-viewer';
+  const codeEl = document.createElement('code');
+  const validLang = fileData.language && hljs.getLanguage(fileData.language) ? fileData.language : 'plaintext';
+  let hl;
+  try {
+    hl = hljs.highlight(fileData.content, { language: validLang }).value;
+  } catch {
+    hl = escapeHtml(fileData.content);
+  }
+  codeEl.innerHTML = hl.split('\n').map((l, i) =>
+    '<div class="code-line" id="code-line-' + (i + 1) + '"><span class="line-num">' + (i + 1) + '</span><span class="line-content">' + (l || ' ') + '</span></div>'
+  ).join('');
+  pre.appendChild(codeEl);
+  viewerBox.appendChild(pre);
+  codePane.appendChild(viewerBox);
+
+  const cta = document.createElement('div');
+  cta.className = 'undoc-cta';
+  cta.innerHTML =
+    '<div class="undoc-cta-icon"><i class="fa-solid fa-file-circle-plus"></i></div>' +
+    '<div class="undoc-cta-title">No documentation yet</div>' +
+    '<div class="undoc-cta-desc">This file hasn\u2019t been documented. Write notes below and save to create its first doc \u2014 it\u2019ll then show up in the Docs tab and the graph like any other documented file.</div>';
+  docsPane.appendChild(cta);
+
+  const editorBox = document.createElement('div');
+  editorBox.id = 'notes-editor-box';
+  editorBox.className = 'editor-box';
+  editorBox.style.display = 'flex';
+  editorBox.innerHTML =
+    '<textarea id="notes-textarea" class="editor-textarea" placeholder="Write documentation notes in Markdown..."></textarea>' +
+    '<div class="editor-buttons">' +
+      '<button class="action-btn primary" onclick="saveUndocumentedNotes(' + JSON.stringify(id) + ')"><i class="fa-solid fa-floppy-disk"></i> Save &amp; Create Doc</button>' +
+      '<span class="save-indicator" id="save-indicator"></span>' +
+    '</div>';
+  docsPane.appendChild(editorBox);
+}
+
+function saveUndocumentedNotes(id) {
+  if (!authToken) {
+    document.getElementById('auth-modal').style.display = 'flex';
+    setTimeout(() => document.getElementById('auth-code-input').focus(), 50);
+    return;
+  }
+  const textarea = document.getElementById('notes-textarea');
+  const notes = textarea ? textarea.value : '';
+  const ind = document.getElementById('save-indicator');
+  if (ind) ind.textContent = 'Saving\u2026';
+
+  fetch('/api/doc/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+    body: JSON.stringify({ id, type: 'doc', notes })
+  })
+  .then(r => r.json())
+  .then(res => {
+    if (res.ok) {
+      if (ind) ind.innerHTML = 'Saved <i class="fa-solid fa-check"></i> \u2014 reloading\u2026';
+      // The server already rebuilt its data and will broadcast an SSE
+      // reload; opening the doc again picks up the freshly created mirror.
+      setTimeout(() => { if (currentDocId === id) openDoc(id); }, 400);
+    } else if (ind) {
+      ind.textContent = 'Error: ' + (res.error || 'unknown');
+    }
+  })
+  .catch(() => { if (ind) ind.textContent = 'Save failed'; });
 }
 
 function renderDocContent(doc, id) {
@@ -1863,10 +2043,12 @@ function setupGlobalClickClose() {
 
 function openHome() {
   currentDocId = null;
-  document.getElementById('empty-state').style.display = 'flex';
-  document.getElementById('doc-header').style.display = 'none';
-  document.getElementById('doc-content').style.display = 'none';
-  stopThreadLoop();
+  // showEmptyState() is the single source of truth for hiding doc-content
+  // (toggles a class, never an inline style — an inline style set here
+  // would permanently override the CSS class rule afterward, which was the
+  // root cause of "the app stops loading any doc until a hard refresh"
+  // after visiting Home).
+  showEmptyState();
   document.querySelectorAll('.tree-row.active').forEach(r => r.classList.remove('active'));
   applyGraphDirectionFilter();
   updateConnectedList('');

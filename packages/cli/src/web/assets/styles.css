@@ -806,11 +806,11 @@ code, kbd, samp, pre {
 }
 
 #doc-header {
-  padding: 18px 32px 14px;
+  padding: 10px 24px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-surface);
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
   flex-shrink: 0;
@@ -818,22 +818,44 @@ code, kbd, samp, pre {
   top: 0;
   z-index: 10;
   backdrop-filter: blur(8px);
+  min-height: 0;
+}
+.doc-header-main {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+.doc-header-icon {
+  color: var(--text-muted);
+  font-size: 12px;
+  flex-shrink: 0;
+  align-self: center;
+}
+.doc-title-text {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .doc-breadcrumbs {
   font-size: 11px;
   color: var(--text-muted);
-  margin-bottom: 5px;
   font-family: var(--font-mono);
   letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  opacity: 0.75;
 }
-.doc-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text);
-  letter-spacing: -0.025em;
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.doc-breadcrumbs:not(:empty)::before {
+  content: '·';
+  margin-right: 8px;
+  opacity: 0.6;
 }
 .doc-actions {
   display: flex;
@@ -847,9 +869,9 @@ code, kbd, samp, pre {
   border: 1px solid var(--border);
   border-radius: 3px;
   color: var(--text-dim);
-  padding: 6px 12px;
+  padding: 5px 11px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 500;
   display: inline-flex;
   align-items: center;
@@ -1336,7 +1358,10 @@ code, kbd, samp, pre {
   width: 100vw;
   height: 100vh;
   pointer-events: none;
-  z-index: 40;
+  /* Must stay above the split-mode auto-hide sidebar/graph-panel overlays
+     (z-index: 90) so a thread connecting into a peeked graph panel remains
+     visible instead of being drawn underneath its opaque background. */
+  z-index: 95;
 }
 .thread-line {
   fill: none;
@@ -1433,6 +1458,34 @@ code, kbd, samp, pre {
   margin-bottom: 14px;
 }
 .notes-title { font-size: 15px; font-weight: 700; color: var(--text); }
+
+/* ─── Undocumented File CTA (Code tab -> file with no mirror doc yet) ────── */
+.undoc-cta {
+  text-align: center;
+  padding: 28px 20px 22px;
+  border: 1px dashed var(--border);
+  border-radius: 3px;
+  background: var(--bg-surface-2);
+  margin-bottom: 18px;
+}
+.undoc-cta-icon {
+  font-size: 22px;
+  color: var(--accent);
+  margin-bottom: 10px;
+}
+.undoc-cta-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.undoc-cta-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  max-width: 380px;
+  margin: 0 auto;
+}
 .editor-box {
   display: none;
   flex-direction: column;

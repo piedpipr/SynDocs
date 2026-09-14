@@ -18,12 +18,14 @@ import { HTML_TEMPLATE } from '../web/html';
 import { INTERNAL_GUIDES } from '../web/internal-docs';
 import {
   computeHash,
+  getCodeBlockLang,
   getLangConfig,
   getMirrorPath,
   getSourceFromMirror,
   parseAnchors,
   parseMirrorDoc,
   renderMirrorDoc,
+  renderNewMirrorDoc,
   hashPassword,
   verifyPassword,
   generateSessionToken,
@@ -255,6 +257,44 @@ export async function runServe(opts: ServeOptions): Promise<void> {
       return;
     }
 
+    // ── Raw File Endpoint ──────────────────────────────────────────────────
+    // Lets the Web UI's "Code" (codebase) tab show source for files that
+    // don't have a mirror doc yet — clicking an undocumented file previously
+    // did nothing (no DATA.docs entry to render). Read-only; only serves
+    // files that walkSourceFiles/buildCodebaseTree would themselves surface
+    // (recognized source language, inside cwd, not ignored), so this can't
+    // be used to read arbitrary files on the host.
+    if (pathname === '/api/file/raw' && req.method === 'GET') {
+      const relPath = parsedUrl.searchParams.get('path') ?? '';
+      const normalized = path.normalize(relPath).replace(/^([./\\]+)/, m => m.replace(/\.\./g, ''));
+      const langConfig = getLangConfig(normalized);
+      const absPath = path.resolve(cwd, normalized);
+      const withinCwd = absPath === cwd || absPath.startsWith(cwd + path.sep);
+
+      if (!relPath || !langConfig || !withinCwd || !fs.existsSync(absPath) || !fs.statSync(absPath).isFile()) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'File not found or not a recognized source file' }));
+        return;
+      }
+
+      const content = readFileSafe(absPath);
+      if (content === null) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'Failed to read file' }));
+        return;
+      }
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        ok: true,
+        path: normalized,
+        content,
+        language: getCodeBlockLang(normalized),
+        hasMirrorDoc: fs.existsSync(path.join(cwd, getMirrorPath(normalized, config.docsRoot))),
+      }));
+      return;
+    }
+
     // ── Static Fonts endpoint ─────────────────────────────────────────────
     if (pathname.startsWith('/fonts/')) {
       const fontFilename = path.basename(pathname);
@@ -350,7 +390,28 @@ function saveDocumentNotes(
     // Whole-file doc
     const mirrorRel = getMirrorPath(id, config.docsRoot);
     const mirrorAbs = path.join(cwd, mirrorRel);
-    if (!fs.existsSync(mirrorAbs)) return false;
+
+    if (!fs.existsSync(mirrorAbs)) {
+      // No mirror doc exists yet for this file — this happens when notes
+      // are added from the Web UI's "Code" (codebase) tab to a file that
+      // has never been through `syndocs init`/annotated with @synd markers.
+      // Create a fresh mirror doc on the spot instead of refusing, so
+      // "click an undocumented file, write notes, save" works end-to-end
+      // without requiring a CLI round-trip first.
+      const sourceAbs = path.join(cwd, id);
+      if (!fs.existsSync(sourceAbs) || !getLangConfig(id)) return false;
+      const sourceContent = readFileSafe(sourceAbs);
+      if (sourceContent === null) return false;
+
+      const hash = computeHash(sourceContent);
+      const lang = getCodeBlockLang(id);
+      const fresh = renderNewMirrorDoc(id, sourceContent, lang, hash, []);
+      const parsed = parseMirrorDoc(fresh);
+      const wholeSection = parsed.sections.find(s => s.kind === 'whole-file');
+      if (wholeSection) wholeSection.notes = editedNotes;
+      writeFile(mirrorAbs, renderMirrorDoc(parsed));
+      return true;
+    }
 
     const raw = readFileSafe(mirrorAbs);
     if (!raw) return false;

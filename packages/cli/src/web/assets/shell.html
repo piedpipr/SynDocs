@@ -192,12 +192,11 @@
   <!-- Center Content Panel -->
   <main id="content-panel" aria-label="Document content">
     <div id="doc-header" style="display:none;">
-      <div>
-        <div class="doc-breadcrumbs" id="doc-path"></div>
-        <div class="doc-title">
-          <span id="doc-title-text"></span>
-          <span id="doc-status-badge"></span>
-        </div>
+      <div class="doc-header-main">
+        <span class="doc-header-icon"><i class="fa-solid fa-file-lines"></i></span>
+        <span id="doc-title-text" class="doc-title-text"></span>
+        <span id="doc-status-badge"></span>
+        <span class="doc-breadcrumbs" id="doc-path"></span>
       </div>
       <div class="doc-actions">
         <button id="edit-notes-btn" class="action-btn primary" onclick="toggleEditNotes()">
