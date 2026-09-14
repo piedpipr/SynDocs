@@ -30,7 +30,27 @@ import * as path from 'path';
 const ASSETS_DIR = path.join(__dirname, 'assets');
 
 function readAsset(name: string): string {
-  return fs.readFileSync(path.join(ASSETS_DIR, name), 'utf8');
+  const fullPath = path.join(ASSETS_DIR, name);
+  try {
+    return fs.readFileSync(fullPath, 'utf8');
+  } catch (err: any) {
+    if (err && err.code === 'ENOENT') {
+      throw new Error(
+        `SynDocs Web UI asset not found: ${fullPath}\n\n` +
+        `This means the build only compiled TypeScript and skipped copying the ` +
+        `Web UI's static assets (styles.css/client.js/shell.html) from ` +
+        `packages/cli/src/web/assets into dist/web/assets.\n\n` +
+        `Fix: from the repo root, run:\n` +
+        `  npm run build\n\n` +
+        `(This runs "tsc && node scripts/copy-web-assets.js" for the CLI package. ` +
+        `If you're invoking tsc directly instead of "npm run build" — e.g. in a ` +
+        `custom install/build script — also run:\n` +
+        `  node packages/cli/scripts/copy-web-assets.js\n` +
+        `after tsc completes.)`
+      );
+    }
+    throw err;
+  }
 }
 
 const SHELL_HTML = readAsset('shell.html');
