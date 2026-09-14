@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="midnight">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SynDocs — Code-Synced Documentation Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&family=Geist:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" id="hljs-theme-link" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+<style>
+/*__SYNDOCS_STYLES__*/
+</style>
+
+</head>
+<body>
+
+<!-- Thread Lines SVG overlay -->
+<svg id="thread-svg" aria-hidden="true"></svg>
+
+<!-- Hover Tooltip Card -->
+<div id="hover-card" role="tooltip"></div>
+
+<!-- Microdoc Popover -->
+<div id="microdoc-popover" role="tooltip">
+  <div class="mp-header">
+    <span style="font-size:14px"><i class="fa-solid fa-tag"></i></span>
+    <span class="mp-label" id="mp-label-text"></span>
+    <span class="mp-kind" id="mp-kind-text"></span>
+  </div>
+  <div class="mp-code-box" id="mp-code-box" style="display:none;">
+    <pre class="mc-code"><code id="mp-code-text"></code></pre>
+  </div>
+  <div class="mp-body markdown-rendered" id="mp-body-text"></div>
+  <div class="mp-footer">
+    <span>Click annotation to jump to section</span>
+    <span><i class="fa-solid fa-turn-down fa-rotate-90"></i></span>
+  </div>
+</div>
+
+<!-- Auth Modal -->
+<div id="auth-modal" role="dialog" aria-label="Authentication">
+  <div class="auth-card">
+    <div class="auth-title"><i class="fa-solid fa-lock"></i> Unlock Web UI Editing</div>
+    <div class="auth-desc">Enter your project access code to enable documentation editing. Configured in <code>.syndocs/auth.json</code>.</div>
+    <input type="password" id="auth-code-input" class="auth-input" placeholder="Access code..." autocomplete="current-password">
+    <div class="auth-actions">
+      <button class="action-btn" id="auth-cancel-btn">Cancel</button>
+      <button class="action-btn primary" id="auth-submit-btn">Unlock</button>
+    </div>
+  </div>
+</div>
+
+<div id="app">
+  <!-- Header -->
+  <header id="header">
+    <div id="logo" onclick="openHome()" title="SynDocs Home">
+      <span class="spark"><i class="fa-solid fa-bolt"></i></span><span>Syn</span>Docs <span class="badge">Studio</span>
+    </div>
+    <div id="stats"></div>
+
+    <div id="search-wrapper">
+      <span class="search-icon"><i class="fa-solid fa-magnifying-glass"></i></span>
+      <input id="search" type="text" placeholder="Search docs & code..." autocomplete="off" aria-label="Search documentation">
+    </div>
+
+    <div id="theme-picker-wrapper">
+      <button class="header-btn" id="theme-picker-btn" title="Change theme" onclick="toggleThemePicker()">
+        <i class="fa-solid fa-palette"></i> Theme
+      </button>
+      <div id="theme-dropdown">
+        <div class="theme-option" data-theme="midnight" onclick="applyTheme('midnight')">
+          <span class="theme-swatch" style="background:linear-gradient(135deg,#0b0e14,#6366f1)"></span>
+          Midnight
+        </div>
+        <div class="theme-option" data-theme="obsidian" onclick="applyTheme('obsidian')">
+          <span class="theme-swatch" style="background:linear-gradient(135deg,#0d0d0d,#a855f7)"></span>
+          Obsidian
+        </div>
+        <div class="theme-option" data-theme="nord" onclick="applyTheme('nord')">
+          <span class="theme-swatch" style="background:linear-gradient(135deg,#1a1f2e,#81a1c1)"></span>
+          Nord
+        </div>
+        <div class="theme-option" data-theme="solarized" onclick="applyTheme('solarized')">
+          <span class="theme-swatch" style="background:linear-gradient(135deg,#001f27,#cb4b16)"></span>
+          Solarized Dark
+        </div>
+        <div class="theme-option" data-theme="catppuccin" onclick="applyTheme('catppuccin')">
+          <span class="theme-swatch" style="background:linear-gradient(135deg,#1e1e2e,#cba6f7)"></span>
+          Catppuccin Mocha
+        </div>
+        <div class="theme-option" data-theme="light" onclick="applyTheme('light')">
+          <span class="theme-swatch" style="background:linear-gradient(135deg,#f8fafc,#6366f1)"></span>
+          Light Studio
+        </div>
+        <div class="theme-option" data-theme="claude" onclick="applyTheme('claude')">
+          <span class="theme-swatch" style="background:linear-gradient(135deg,#faf9f5,#bd5b3a)"></span>
+          Claude
+        </div>
+        <div class="theme-option" data-theme="vscode" onclick="applyTheme('vscode')">
+          <span class="theme-swatch" style="background:linear-gradient(135deg,#1e1e1e,#007acc)"></span>
+          VS Code Dark
+        </div>
+        <div class="theme-option" data-theme="visual-studio" onclick="applyTheme('visual-studio')">
+          <span class="theme-swatch" style="background:linear-gradient(135deg,#ffffff,#007acc)"></span>
+          Visual Studio
+        </div>
+        <div class="theme-option" data-theme="sublime" onclick="applyTheme('sublime')">
+          <span class="theme-swatch" style="background:linear-gradient(135deg,#272822,#fd971f)"></span>
+          Sublime Text
+        </div>
+        <div class="theme-option" data-theme="dracula" onclick="applyTheme('dracula')">
+          <span class="theme-swatch" style="background:linear-gradient(135deg,#282a36,#bd93f9)"></span>
+          Dracula
+        </div>
+        <div class="theme-option" data-theme="atom" onclick="applyTheme('atom')">
+          <span class="theme-swatch" style="background:linear-gradient(135deg,#282c34,#61afef)"></span>
+          Atom One Dark
+        </div>
+        <div class="theme-option" data-theme="github-dark" onclick="applyTheme('github-dark')">
+          <span class="theme-swatch" style="background:linear-gradient(135deg,#0d1117,#58a6ff)"></span>
+          GitHub Dark
+        </div>
+        <div class="theme-option" data-theme="github-light" onclick="applyTheme('github-light')">
+          <span class="theme-swatch" style="background:linear-gradient(135deg,#ffffff,#0969da)"></span>
+          GitHub Light
+        </div>
+      </div>
+    </div>
+
+    <div id="font-picker-wrapper">
+      <button class="header-btn" id="font-picker-btn" title="Change typography font palette" onclick="toggleFontPicker()">
+        <i class="fa-solid fa-font"></i> <span id="current-font-label">Modern</span>
+      </button>
+      <div id="font-dropdown">
+        <div class="font-option active" data-font="modern" onclick="applyFont('modern')">
+          <div class="font-option-title"><i class="fa-solid fa-bolt"></i> Modern Studio</div>
+          <div class="font-option-preview">Inter + JetBrains Mono</div>
+        </div>
+        <div class="font-option" data-font="apple" onclick="applyFont('apple')">
+          <div class="font-option-title"><i class="fa-brands fa-apple"></i> Apple Typography</div>
+          <div class="font-option-preview">SF Pro + SF Mono</div>
+        </div>
+        <div class="font-option" data-font="nerd" onclick="applyFont('nerd')">
+          <div class="font-option-title"><i class="fa-solid fa-terminal"></i> Nerd Fonts</div>
+          <div class="font-option-preview">JetBrains/Fira NF + Dev Glyphs</div>
+        </div>
+        <div class="font-option" data-font="geist" onclick="applyFont('geist')">
+          <div class="font-option-title"><i class="fa-solid fa-play fa-rotate-270"></i> Geist Modern</div>
+          <div class="font-option-preview">Geist Sans + Geist Mono</div>
+        </div>
+        <div class="font-option" data-font="editorial" onclick="applyFont('editorial')">
+          <div class="font-option-title"><i class="fa-solid fa-book-open"></i> Editorial Serif</div>
+          <div class="font-option-preview">Newsreader Serif + JetBrains</div>
+        </div>
+      </div>
+    </div>
+
+    <button id="auth-toggle-btn" class="header-btn" title="Toggle edit mode">
+      <span id="auth-status-icon"><i class="fa-solid fa-lock"></i></span> <span id="auth-status-text">Read Only</span>
+    </button>
+    <button id="toggle-split-mode" class="header-btn" onclick="toggleSplitMode()" title="Toggle side-by-side focus mode (auto-hiding tree &amp; graph)">
+      <i class="fa-solid fa-table-columns"></i> Split View
+    </button>
+    <button id="toggle-graph" class="header-btn" onclick="toggleGraphPanel()" title="Toggle graph panel"><i class="fa-solid fa-diagram-project"></i> Graph</button>
+  </header>
+
+  <!-- Left Sidebar -->
+  <nav id="sidebar" aria-label="Documentation tree">
+    <div class="sidebar-tabs">
+      <div class="sidebar-tab active" id="tab-docs" onclick="switchSidebarTab('docs')" role="tab">
+        <i class="fa-solid fa-file-lines"></i> Docs
+      </div>
+      <div class="sidebar-tab" id="tab-codebase" onclick="switchSidebarTab('codebase')" role="tab">
+        <i class="fa-solid fa-code"></i> Code
+      </div>
+    </div>
+    <div class="sidebar-toolbar">
+      <span id="tree-counter">Loading...</span>
+      <div>
+        <button class="sidebar-toolbar-btn" onclick="expandAllTree()" title="Expand all"><i class="fa-solid fa-square-plus"></i></button>
+        <button class="sidebar-toolbar-btn" onclick="collapseAllTree()" title="Collapse all"><i class="fa-solid fa-square-minus"></i></button>
+      </div>
+    </div>
+    <div class="tree-view-container" id="tree-view" role="tree"></div>
+  </nav>
+
+  <!-- Center Content Panel -->
+  <main id="content-panel" aria-label="Document content">
+    <div id="doc-header" style="display:none;">
+      <div>
+        <div class="doc-breadcrumbs" id="doc-path"></div>
+        <div class="doc-title">
+          <span id="doc-title-text"></span>
+          <span id="doc-status-badge"></span>
+        </div>
+      </div>
+      <div class="doc-actions">
+        <button id="edit-notes-btn" class="action-btn primary" onclick="toggleEditNotes()">
+          <i class="fa-solid fa-pen"></i> Edit Notes
+        </button>
+      </div>
+    </div>
+
+    <div id="doc-body">
+      <div id="empty-state">
+        <div class="empty-icon"><i class="fa-solid fa-book"></i></div>
+        <div class="empty-title">SynDocs Interactive Studio</div>
+        <div class="empty-desc">
+          Select a document from the sidebar or click any node in the graph to begin exploring your codebase documentation.
+        </div>
+        <div class="empty-actions">
+          <button class="action-btn primary" onclick="openDoc('guides/internal/quickstart.md')"><i class="fa-solid fa-bolt"></i> Quickstart</button>
+          <button class="action-btn" onclick="openDoc('guides/internal/annotations.md')"><i class="fa-solid fa-tag"></i> Annotations</button>
+          <button class="action-btn" onclick="openDoc('guides/internal/cli-reference.md')"><i class="fa-solid fa-screwdriver-wrench"></i> CLI Ref</button>
+        </div>
+      </div>
+      <div id="doc-content">
+        <div id="doc-code-pane"></div>
+        <div id="doc-docs-pane"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Right Graph Panel -->
+  <aside id="graph-panel" aria-label="Codebase graph">
+    <div id="graph-header">
+      <div class="graph-title">Codebase Graph</div>
+      <div class="graph-view-switch">
+        <button class="switch-btn active" id="btn-view-canvas" onclick="setGraphView('canvas')"><i class="fa-solid fa-diagram-project"></i> Graph</button>
+        <button class="switch-btn" id="btn-view-list" onclick="setGraphView('list')"><i class="fa-solid fa-list"></i> Connected</button>
+      </div>
+    </div>
+
+    <div id="graph-filter-bar">
+      <div class="dir-toggle-group" role="group" aria-label="Link direction">
+        <button class="dir-toggle-btn active" id="btn-dir-all" onclick="setLinkDirection('all')" title="Show all links (incoming & outgoing)"><i class="fa-solid fa-arrows-left-right"></i> All</button>
+        <button class="dir-toggle-btn" id="btn-dir-incoming" onclick="setLinkDirection('incoming')" title="Show incoming links (files pointing to current file)"><i class="fa-solid fa-arrow-left"></i> Incoming</button>
+        <button class="dir-toggle-btn" id="btn-dir-outgoing" onclick="setLinkDirection('outgoing')" title="Show outgoing links (files this file points to)"><i class="fa-solid fa-arrow-right"></i> Outgoing</button>
+      </div>
+      <span id="conn-count-badge" class="dir-badge">0 links</span>
+    </div>
+
+    <div id="graph-svg-container">
+      <svg id="graph-svg"></svg>
+    </div>
+
+    <div id="connected-list-container"></div>
+
+    <div id="graph-footer">
+      <div id="graph-physics">
+        <div class="physics-row">
+          <label><i class="fa-solid fa-down-long"></i> Gravity</label>
+          <input type="range" class="physics-slider" id="slider-gravity" min="0" max="1" step="0.01" value="0.06"
+            oninput="onPhysicsChange()">
+          <span class="physics-val" id="val-gravity">0.06</span>
+        </div>
+        <div class="physics-row">
+          <label><i class="fa-solid fa-bolt"></i> Charge</label>
+          <input type="range" class="physics-slider" id="slider-charge" min="-600" max="-30" step="10" value="-280"
+            oninput="onPhysicsChange()">
+          <span class="physics-val" id="val-charge">-280</span>
+        </div>
+        <div class="physics-row">
+          <label><i class="fa-solid fa-ruler-horizontal"></i> Distance</label>
+          <input type="range" class="physics-slider" id="slider-dist" min="30" max="300" step="10" value="110"
+            oninput="onPhysicsChange()">
+          <span class="physics-val" id="val-dist">110</span>
+        </div>
+      </div>
+      <div class="graph-footer-row">
+        <span id="graph-info">Hover node to inspect · drag to rearrange · hover footer for physics</span>
+        <span id="graph-cg-badge" style="font-size:10px; opacity:0.65;"></span>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<!-- Edge hover zones for split-mode auto-hiding panels (outside #app's grid on purpose,
+     so they can never interfere with the grid's implicit auto-placement of header/
+     sidebar/content-panel/graph-panel). -->
+<div id="edge-hint-left" aria-hidden="true"></div>
+<div id="edge-hint-right" aria-hidden="true"></div>
+
+<script id="syndocs-data" type="application/json">__SYNDOCS_DATA__</script>
+<script>
+/*__SYNDOCS_CLIENT_JS__*/
+</script>
+</body>
+</html>
