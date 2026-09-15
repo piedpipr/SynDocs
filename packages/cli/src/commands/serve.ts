@@ -301,6 +301,46 @@ export async function runServe(opts: ServeOptions): Promise<void> {
       return;
     }
 
+    // ── Doc Sync Endpoint (fixes 'stale' -> 'ok') ──────────────────────────
+    // A doc goes 'stale' when its source file changes after the mirror doc
+    // was generated (the stored hash/code snapshot no longer matches what's
+    // on disk). There was previously no way to resolve this from the Web
+    // UI at all — only the CLI's `syndocs update` could. This re-syncs the
+    // stored code/hash with the current source, preserving all notes.
+    if (pathname === '/api/doc/sync' && req.method === 'POST') {
+      const authHeader = req.headers.authorization ?? '';
+      const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+      const isAuthenticated = token ? verifySessionToken(token, sessionSecret) : false;
+
+      if (!isAuthenticated) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'Unauthorized: invalid or expired access code session' }));
+        return;
+      }
+
+      const body = await readBodyJson(req);
+      const relPath = String(body?.path ?? '');
+      const normalized = path.normalize(relPath).replace(/^([./\\]+)/, m => m.replace(/\.\./g, ''));
+      const absPath = path.resolve(cwd, normalized);
+      if (absPath !== cwd && !absPath.startsWith(cwd + path.sep)) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'Path outside project root' }));
+        return;
+      }
+
+      const result = regenerateMirrorFromSource(cwd, config, normalized);
+      if (result.ok) {
+        data = await buildData(cwd, config);
+        broadcast('reload');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result));
+      } else {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result));
+      }
+      return;
+    }
+
     // ── Raw File Endpoint ──────────────────────────────────────────────────
     // Lets the Web UI's "Code" (codebase) tab show source for files that
     // don't have a mirror doc yet — clicking an undocumented file previously
@@ -424,6 +464,88 @@ interface AddAnnotationResult {
  *  - 'block'  (multi-line)   → 'above', plus `<comment> @endsynd` after the
  *                              last line, marking an explicit block range
  */
+// ─── Helper: regenerate a mirror doc's code/hash from its current source ────
+
+interface SyncResult {
+  ok: boolean;
+  error?: string;
+  docId?: string;
+}
+
+/**
+ * Re-sync a mirror doc's stored code snapshots and hashes with the file's
+ * current on-disk content — the fix for a 'stale' status (source changed
+ * since the doc was last generated). Notes are always preserved; only
+ * code/hash/scope are refreshed. Shared by the sync-only endpoint and by
+ * addAnnotationToSource() (which regenerates after inserting a marker).
+ *
+ * Micro-doc sections whose @synd marker no longer exists in the source
+ * (e.g. the annotated code was deleted) are dropped, matching what
+ * `syndocs update` does — a mirror doc shouldn't keep documenting code
+ * that's gone.
+ */
+function regenerateMirrorFromSource(
+  cwd: string,
+  config: SynDocsConfig,
+  normalized: string,
+): SyncResult {
+  const langConfig = getLangConfig(normalized);
+  if (!langConfig) return { ok: false, error: 'Not a recognized source file' };
+
+  const sourceAbs = path.join(cwd, normalized);
+  if (!fs.existsSync(sourceAbs)) return { ok: false, error: 'Source file not found' };
+
+  const sourceContent = readFileSafe(sourceAbs);
+  if (sourceContent === null) return { ok: false, error: 'Failed to read source file' };
+
+  const mirrorRel = getMirrorPath(normalized, config.docsRoot);
+  const mirrorAbs = path.join(cwd, mirrorRel);
+  if (!fs.existsSync(mirrorAbs)) return { ok: false, error: 'No mirror doc exists for this file yet' };
+
+  const existingRaw = readFileSafe(mirrorAbs);
+  const existingDoc = existingRaw ? parseMirrorDoc(existingRaw) : null;
+
+  const lang = getCodeBlockLang(normalized);
+  const currentHash = computeHash(sourceContent);
+  const anchors = parseAnchors(sourceContent, langConfig, { filePath: normalized });
+
+  const newSections: DocSection[] = [];
+  const existingWhole = existingDoc?.sections.find(s => s.kind === 'whole-file');
+  newSections.push({
+    kind: 'whole-file',
+    hash: currentHash,
+    codeCopy: sourceContent,
+    codeLanguage: lang,
+    notes: existingWhole?.notes ?? '',
+  });
+
+  const microAnchors = anchors.filter(a => a.kind === 'micro' && a.label);
+  for (const anchor of microAnchors) {
+    const nextAnchor = anchors.find(a => a.lineIndex > anchor.lineIndex);
+    const microCode = extractMicroDocCode(sourceContent, anchor, nextAnchor?.lineIndex);
+    const existingSection = existingDoc?.sections.find(
+      s => s.kind === 'micro' && s.label === anchor.label,
+    );
+    newSections.push({
+      kind: 'micro',
+      label: anchor.label!,
+      hash: computeHash(microCode),
+      codeCopy: microCode,
+      codeLanguage: lang,
+      notes: existingSection?.notes ?? '',
+      elementKind: anchor.elementKind,
+      elementName: anchor.elementName,
+      scopeStartLine: anchor.scopeStartLine,
+      scopeEndLine: anchor.scopeEndLine,
+    });
+  }
+
+  const title = existingDoc?.title ?? (normalized.split('/').pop() ?? normalized);
+  writeFile(mirrorAbs, renderMirrorDoc({ title, sections: newSections }));
+
+  return { ok: true, docId: normalized };
+}
+
 function addAnnotationToSource(
   cwd: string,
   config: SynDocsConfig,

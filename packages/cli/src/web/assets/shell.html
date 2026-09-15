@@ -199,6 +199,9 @@
         <span class="doc-breadcrumbs" id="doc-path"></span>
       </div>
       <div class="doc-actions">
+        <button id="sync-doc-btn" class="action-btn stale-action" style="display:none;" onclick="syncStaleDoc()" title="Refresh the stored code snapshot to match the current source, then mark this doc in sync">
+          <i class="fa-solid fa-rotate"></i> Sync
+        </button>
         <button id="edit-notes-btn" class="action-btn primary" onclick="toggleEditNotes()">
           <i class="fa-solid fa-pen"></i> Edit Notes
         </button>
