@@ -26,6 +26,8 @@ syndocs self-update
 syndocs uninstall
 ```
 <img width="1863" height="990" alt="1 SynDocs-—-Code-Synced-Documentation-Studio" src="https://github.com/user-attachments/assets/25fcfe42-8f35-4042-b222-664d52d23839" />
+<img width="1863" height="990" alt="2 SynDocs-—-Code-Synced-Documentation-Studio" src="https://github.com/user-attachments/assets/e3c256ee-6ee3-478c-8430-3f83d15eaa55" />
+
 
 ---
 
