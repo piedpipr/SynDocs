@@ -7,7 +7,7 @@
 ## Quick Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/piedpipr/SynDocs/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/piedpipr/SynDocs/main/quickinstall.sh | bash
 ```
 
 Or install specific management operations:
