@@ -617,7 +617,64 @@ function openDoc(id) {
   badge.className = 'tree-badge ' + (doc.status || 'dim');
   badge.innerHTML = doc.status === 'ok' ? '<i class="fa-solid fa-check"></i> in sync' : doc.status === 'stale' ? '<i class="fa-solid fa-wave-square"></i> stale' : doc.status || '';
 
+  const syncBtn = document.getElementById('sync-doc-btn');
+  syncBtn.style.display = doc.status === 'stale' ? 'inline-flex' : 'none';
+  syncBtn.dataset.syncPath = doc.sourceFile;
+
   renderDocContent(doc, id);
+}
+
+/**
+ * Fix a 'stale' doc: refresh its stored code snapshot/hash to match the
+ * current source (notes are always preserved). This is the only way to
+ * turn a stale doc 'ok' again from the Web UI — editing/saving notes never
+ * touched the hash, so previously there was no path back to 'ok' at all
+ * short of running `syndocs update` from the CLI.
+ */
+function syncStaleDoc() {
+  if (!authToken) {
+    document.getElementById('auth-modal').style.display = 'flex';
+    setTimeout(() => document.getElementById('auth-code-input').focus(), 50);
+    return;
+  }
+  const btn = document.getElementById('sync-doc-btn');
+  const filePath = btn.dataset.syncPath;
+  if (!filePath) return;
+
+  const original = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-rotate fa-spin"></i> Syncing\u2026';
+
+  fetch('/api/doc/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+    body: JSON.stringify({ path: filePath })
+  })
+  .then(r => r.json())
+  .then(res => {
+    btn.disabled = false;
+    btn.innerHTML = original;
+    if (!res.ok) {
+      alert('Sync failed: ' + (res.error || 'unknown error'));
+      return;
+    }
+    // The server already rebuilt its data; pull it and re-render so the
+    // badge, sidebar status dots, and graph node color all update together.
+    fetch('/api/data')
+      .then(r => r.json())
+      .then(d => {
+        Object.assign(DATA, d);
+        renderStats();
+        renderSidebar();
+        if (currentGraphView === 'canvas') buildGraph();
+        if (currentDocId) openDoc(currentDocId);
+      });
+  })
+  .catch(() => {
+    btn.disabled = false;
+    btn.innerHTML = original;
+    alert('Sync failed: network error');
+  });
 }
 
 function showEmptyState(show = true) {
@@ -658,6 +715,7 @@ function renderUndocumentedFile(id, fileData) {
   const badge = document.getElementById('doc-status-badge');
   badge.className = 'tree-badge dim';
   badge.innerHTML = '<i class="fa-solid fa-circle-dot"></i> undocumented';
+  document.getElementById('sync-doc-btn').style.display = 'none';
 
   const codePane = document.getElementById('doc-code-pane');
   const docsPane = document.getElementById('doc-docs-pane');

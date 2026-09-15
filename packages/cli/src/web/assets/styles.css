@@ -882,6 +882,13 @@ code, kbd, samp, pre {
 .action-btn:hover { background: var(--bg-surface-hover); border-color: var(--accent); color: var(--text); }
 .action-btn.primary { background: var(--accent); color: #fff; border-color: transparent; }
 .action-btn.primary:hover { background: var(--accent-hover); }
+.action-btn.stale-action {
+  background: var(--stale-dim);
+  border-color: var(--stale);
+  color: var(--stale);
+}
+.action-btn.stale-action:hover { background: var(--stale); color: var(--bg); }
+.action-btn.stale-action:disabled { opacity: 0.6; cursor: default; }
 
 /* ─── Document Body ─────────────────────────────────────────────────────────── */
 #doc-body {
@@ -1028,8 +1035,8 @@ code, kbd, samp, pre {
   background: var(--bg-surface) !important;
   overflow-x: auto;
   font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.7;
+  font-size: 13px;
+  line-height: 1.75;
   padding: 12px 0;
   margin: 0;
 }
@@ -1342,7 +1349,7 @@ code, kbd, samp, pre {
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  margin-bottom: 10px;
+  margin-bottom: 14px;
   overflow: hidden;
   transition: border-color 0.15s;
 }
@@ -1408,7 +1415,7 @@ code, kbd, samp, pre {
 .microdoc-card.expanded .mc-toggle { transform: rotate(90deg); }
 .microdoc-card-body {
   display: none;
-  padding: 14px;
+  padding: 16px 18px;
   border-top: 1px solid var(--border);
 }
 .microdoc-card.expanded .microdoc-card-body { display: block; }
@@ -1424,7 +1431,7 @@ code, kbd, samp, pre {
   margin-bottom: 12px;
 }
 .mc-code code { background: none !important; display: block; }
-.mc-notes { font-size: 12.5px; }
+.mc-notes { font-size: 13.5px; line-height: 1.75; }
 
 /* ─── SVG Thread Layer ─────────────────────────────────────────────────────── */
 #thread-svg {
@@ -1633,9 +1640,13 @@ code, kbd, samp, pre {
 
 /* ─── Markdown Rendered Typography ─────────────────────────────────────────── */
 .markdown-rendered {
-  font-size: 14px;
-  line-height: 1.85;
+  font-size: 15.5px;
+  line-height: 1.8;
   color: var(--text-dim);
+  /* A comfortable reading measure (~72ch), independent of the code viewer
+     above it — code benefits from the full doc-body width so lines don't
+     wrap, but prose is easier to read at a narrower column. */
+  max-width: 720px;
 }
 .markdown-rendered h1,
 .markdown-rendered h2,
