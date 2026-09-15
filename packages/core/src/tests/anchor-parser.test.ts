@@ -176,14 +176,23 @@ test('inline anchor after a JS method call (this.foo()) is not misidentified as 
   const result = anchors(`
 this.doSomething(x); // @synd
 `, 'x.ts');
-  assert.equal(result[0].elementName, undefined);
+  // Under the simplified model a trailing marker always yields a single-line
+  // micro-doc, so it always has a scope. What must NOT happen is the call
+  // being mistaken for a declaration — kind stays 'line', never
+  // 'function'/'variable'/'method'.
+  assert.equal(result[0].elementKind, 'line');
+  assert.equal(result[0].scopeStartLine, 1);
+  assert.equal(result[0].scopeEndLine, 2);
 });
 
 test('property assignment via -> is not misidentified as a variable declaration', () => {
   const result = anchors(`<?php
 $table->exam_category = 'practice_set'; // @synd
 `, 'x.php');
-  assert.equal(result[0].elementName, undefined);
+  // As above: single-line scope is expected; the point is that the property
+  // assignment isn't promoted to a 'variable' declaration.
+  assert.equal(result[0].elementKind, 'line');
+  assert.notEqual(result[0].elementName, 'exam_category');
 });
 
 test('genuine Java/C#-style typed method declaration (no fixed keyword) is still detected', () => {
@@ -192,7 +201,9 @@ public void calculateTotal() { // @synd
   return;
 }
 `, 'x.java');
-  assert.equal(result[0].elementKind, 'method');
+  // Trailing marker => single-line micro-doc (kind 'line'), but the label
+  // must still be derived from the declaration on that line.
+  assert.equal(result[0].elementKind, 'line');
   assert.equal(result[0].elementName, 'calculateTotal');
 });
 
@@ -304,7 +315,11 @@ export function afterCommentBrace(x) {
   assert.ok(micro!.scopeEndLine! <= 9);
 });
 
-test('inline bare anchor resolves the enclosing declaration via tree-sitter, including inside a class body (Java)', () => {
+test('inline bare anchor documents only its own line, even inside a class body (Java)', () => {
+  // Simplified model: a trailing annotation is ALWAYS a single-line
+  // micro-doc. It previously walked up to the enclosing declaration and
+  // documented the whole method, which made trailing markers unusable for
+  // annotating one specific line.
   const result = anchors(`
 public class Foo {
   public void calculateTotal() { // @synd
@@ -314,8 +329,11 @@ public class Foo {
 `, 'x.java');
   const micro = result.find(a => a.inline);
   assert.ok(micro);
-  assert.equal(micro!.elementKind, 'method');
+  assert.equal(micro!.elementKind, 'line');
   assert.equal(micro!.elementName, 'calculateTotal');
+  // The annotation is on line index 2; the scope must be exactly that line.
+  assert.equal(micro!.scopeStartLine, 2);
+  assert.equal(micro!.scopeEndLine, 3);
 });
 
 test('above-annotation resolves a PHP method declared inside a class body via tree-sitter', () => {
@@ -438,4 +456,87 @@ test('an @endsynd belonging to a later annotation does not capture an earlier on
   );
   assert.equal(micros[1].scopeStartLine, 6);
   assert.equal(micros[1].scopeEndLine, 7);
+});
+
+// ─── Simplified scope model ────────────────────────────────────────────────
+// 1. An above-annotation targets the code block that immediately FOLLOWS it,
+//    never the block it happens to sit inside.
+// 2. `@endsynd` defines a custom range; without it, the next block is used.
+// 3. A trailing annotation documents exactly its own line.
+
+test('rule 1: above-annotation targets the next sibling, not the enclosing class', () => {
+  const result = anchors(`
+class Foo {
+  // @synd
+  bar() { return 1; }
+  baz() { return 2; }
+}
+`, 'x.ts');
+  const micro = result.find(a => a.kind === 'micro');
+  assert.ok(micro);
+  assert.equal(micro!.elementName, 'bar');
+  // Must cover only bar(), not baz() and not the whole class body.
+  assert.equal(micro!.scopeStartLine, 3);
+  assert.equal(micro!.scopeEndLine, 4);
+});
+
+test('rule 2: @endsynd defines a custom block spanning several declarations', () => {
+  const content = `const head = 0;
+
+// @synd
+const a = 1;
+const b = 2;
+// @endsynd
+`;
+  const result = anchors(content, 'x.ts');
+  const micro = result.find(a => a.kind === 'micro');
+  assert.ok(micro);
+  // Custom range => generic 'block' kind, not the kind of the first decl.
+  assert.equal(micro!.elementKind, 'block');
+  assert.equal(micro!.scopeStartLine, 3);
+  assert.equal(micro!.scopeEndLine, 5);
+});
+
+test('rule 2: a labelled annotation also honours @endsynd', () => {
+  const content = `const head = 0;
+
+// @synd: mine
+const a = 1;
+const b = 2;
+// @endsynd
+`;
+  const result = anchors(content, 'x.ts');
+  const micro = result.find(a => a.label === 'mine');
+  assert.ok(micro);
+  assert.equal(micro!.elementKind, 'block');
+  assert.equal(micro!.scopeStartLine, 3);
+  assert.equal(micro!.scopeEndLine, 5);
+});
+
+test('rule 3: a trailing annotation never expands past its own line', () => {
+  const content = `export function outer() {
+  const x = compute(); // @synd
+  return x;
+}
+`;
+  const result = anchors(content, 'x.ts');
+  const micro = result.find(a => a.inline);
+  assert.ok(micro);
+  assert.equal(micro!.elementKind, 'line');
+  assert.equal(micro!.scopeStartLine, 1);
+  assert.equal(micro!.scopeEndLine, 2);
+});
+
+test('rule 3: a trailing annotation on a block-opening line stays single-line', () => {
+  const content = `class A {
+  method() { // @synd
+    return 1;
+  }
+}
+`;
+  const result = anchors(content, 'x.ts');
+  const micro = result.find(a => a.inline);
+  assert.ok(micro);
+  assert.equal(micro!.scopeStartLine, 1);
+  assert.equal(micro!.scopeEndLine, 2);
 });

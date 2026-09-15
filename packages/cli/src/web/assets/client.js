@@ -754,8 +754,10 @@ function renderDocContent(doc, id) {
   docsPane.innerHTML = '';
   currentMicrodocs = {};
   // The old line elements are about to be destroyed, so drop any pending
-  // "Add Doc" selection pointing at them.
+  // "Add Doc" selection pointing at them, and dismiss any hover overlay
+  // anchored to a span that's about to disappear.
   clearLineSelection();
+  hideTransientOverlays();
 
   stopThreadLoop();
   allThreadSpans = [];
@@ -1063,6 +1065,11 @@ function addMicrodocHighlights(highlightedHtml, rawCode, microdocRegistry) {
   const lines = highlightedHtml.split('\n');
   const rawLines = rawCode.split('\n');
 
+  // Each bare marker must resolve to its OWN micro-doc. Labels already
+  // claimed by an earlier marker are off-limits, otherwise every bare
+  // annotation in a file would link to whichever one matched first.
+  const usedLabels = new Set();
+
   return lines.map((line, idx) => {
     const rawLine = rawLines[idx] || '';
     const m = rawLine.match(/@(?:syndocs|synd)(?:\s*:\s*([a-zA-Z0-9_-]+))?/);
@@ -1070,17 +1077,33 @@ function addMicrodocHighlights(highlightedHtml, rawCode, microdocRegistry) {
 
     let label = m[1];
     if (!label) {
-      const lineNum = idx + 1;
+      // Resolve a bare marker to its micro-doc by position. Scope lines are
+      // 0-based, matching `idx`.
+      //
+      // The previous logic looked for an entry whose scope *contained* the
+      // marker line — but an above-annotation sits strictly BEFORE its
+      // scope (scopeStartLine = first line after the comment), so that test
+      // could never match the right entry. With several annotations in one
+      // file it fell through to the "only one micro-doc" shortcut or
+      // matched an unrelated enclosing range, which is why every marker
+      // opened the same (first) doc.
+      //
+      //   trailing marker -> scopeStartLine === idx  (documents its own line)
+      //   above marker    -> nearest scopeStartLine  >  idx
+      let best = null;
+      let bestStart = Infinity;
       for (const [l, entry] of Object.entries(microdocRegistry)) {
-        if (entry.scopeStartLine !== undefined && entry.scopeStartLine <= lineNum && lineNum <= (entry.scopeEndLine || lineNum)) {
-          label = l;
-          break;
+        if (usedLabels.has(l) || entry.scopeStartLine === undefined) continue;
+        if (entry.scopeStartLine === idx) { best = l; bestStart = idx; break; }
+        if (entry.scopeStartLine > idx && entry.scopeStartLine < bestStart) {
+          best = l;
+          bestStart = entry.scopeStartLine;
         }
       }
-      if (!label && Object.keys(microdocRegistry).length === 1) {
-        label = Object.keys(microdocRegistry)[0];
-      }
+      label = best;
     }
+
+    if (label) usedLabels.add(label);
 
     if (!label || !microdocRegistry[label]) return line;
 
@@ -1297,6 +1320,23 @@ function setupLineSelectionHandlers() {
   window.addEventListener('resize', reposition);
 }
 
+/**
+ * Hide every hover-triggered overlay (link hover card, microdoc popover).
+ *
+ * These are shown on 'mouseenter' and hidden on 'mouseleave'. If the element
+ * they're anchored to is removed from the DOM while hovered — which happens
+ * whenever navigating to another doc rebuilds the code pane — the
+ * 'mouseleave' never fires and the overlay stays stuck on screen until the
+ * next hover. Anything that destroys code-pane content calls this first.
+ */
+function hideTransientOverlays() {
+  const hoverCard = document.getElementById('hover-card');
+  if (hoverCard) hoverCard.style.display = 'none';
+  const popover = document.getElementById('microdoc-popover');
+  if (popover) popover.style.display = 'none';
+  if (threadMode === 'hover') stopThreadLoop();
+}
+
 function attachTokenListeners(codeEl, currentId) {
   const hoverCard = document.getElementById('hover-card');
 
@@ -1332,6 +1372,10 @@ function attachTokenListeners(codeEl, currentId) {
       }
     });
     span.addEventListener('click', () => {
+      // Clicking navigates, which rebuilds the code pane and destroys this
+      // span — so its 'mouseleave' never fires and the hover card would be
+      // left on screen permanently. Dismiss it (and any thread line) here.
+      hideTransientOverlays();
       // A same-file reference (e.g. calling a sibling method) should scroll
       // to that line in the current view, not re-open the doc we're already
       // looking at — openDoc() fully clears and rebuilds doc-content, which
@@ -1394,6 +1438,7 @@ function attachMicrodocListeners(codeEl) {
 
     el.addEventListener('click', e => {
       e.stopPropagation();
+      popover.style.display = 'none';
       const card = document.querySelector('.microdoc-card[data-label="' + CSS.escape(label) + '"]');
       if (card) {
         card.classList.add('expanded');

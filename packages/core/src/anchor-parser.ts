@@ -157,9 +157,14 @@ export function parseAnchors(
           const explicitEnd = matchingEndMarker(span.endLine);
           const useExplicit = explicitEnd !== undefined;
 
-          const slug = scope
-            ? generateUniqueSlug(toKebabSlug(scope.name), seenLabels)
-            : generateUniqueSlug(`block-L${i + 1}`, seenLabels);
+          // An explicit @endsynd range can span several declarations, so
+          // naming it after whichever one happens to come first would be
+          // misleading — label it as a block instead.
+          const slug = useExplicit
+            ? generateUniqueSlug(`block-L${i + 1}`, seenLabels)
+            : scope
+              ? generateUniqueSlug(toKebabSlug(scope.name), seenLabels)
+              : generateUniqueSlug(`block-L${i + 1}`, seenLabels);
 
           seenLabels.add(slug);
           anchors.push({
@@ -167,8 +172,11 @@ export function parseAnchors(
             label: slug,
             lineIndex: i,
             autoScoped: true,
-            elementKind: useExplicit ? (scope?.kind ?? 'block') : scope?.kind,
-            elementName: useExplicit ? (scope?.name ?? slug) : scope?.name,
+            // An explicit @endsynd range is a custom block by definition —
+            // it may span several declarations, so don't inherit the kind of
+            // whichever one happens to be first.
+            elementKind: useExplicit ? 'block' : scope?.kind,
+            elementName: useExplicit ? slug : scope?.name,
             scopeStartLine: useExplicit ? span.endLine + 1 : scope?.startLine,
             scopeEndLine: useExplicit ? explicitEnd : scope?.endLine,
           });
@@ -192,14 +200,18 @@ export function parseAnchors(
         }
         seenLabels.add(label);
         const scope = resolveScopeBoundaries(content, lines, langConfig, span.endLine, false);
+        // An explicit `@endsynd` defines a custom range for a labelled
+        // annotation exactly as it does for a bare one.
+        const explicitEnd = matchingEndMarker(span.endLine);
+        const useExplicit = explicitEnd !== undefined;
         anchors.push({
           kind: 'micro',
           label,
           lineIndex: i,
-          elementKind: scope?.kind,
-          elementName: scope?.name,
-          scopeStartLine: scope?.startLine,
-          scopeEndLine: scope?.endLine,
+          elementKind: useExplicit ? 'block' : scope?.kind,
+          elementName: useExplicit ? label : scope?.name,
+          scopeStartLine: useExplicit ? span.endLine + 1 : scope?.startLine,
+          scopeEndLine: useExplicit ? explicitEnd : scope?.endLine,
         });
       }
       continue;
@@ -400,58 +412,61 @@ function resolveScopeBoundaries(
   lineIndex: number,
   inline: boolean,
 ): ScopeResult | null {
-  if (hasAstSupport(langConfig.grammarId)) {
-    const astResult = resolveScopeViaAst(content, langConfig.grammarId, lineIndex, inline);
-    if (astResult) return astResult;
-  }
+  // ── Trailing (inline) annotation: ALWAYS documents exactly that one line.
+  //
+  // Previously this walked up the AST to the enclosing declaration, so
+  // `foo(); // @synd` on a line inside a function documented the whole
+  // function. Under the simplified model a trailing marker is explicitly a
+  // single-line micro-doc, so the range is fixed at [lineIndex, lineIndex+1)
+  // regardless of what the line contains. The AST/regex tiers are still
+  // consulted, but only to pick a good *name* for the generated label.
+  if (inline) {
+    let name: string | undefined;
 
-  return inline
-    ? resolveInlineScope(lines, lineIndex)
-    : resolveAboveScope(lines, lineIndex);
-}
+    // Prefer a name derived from the annotated line's own code — for a
+    // single-line micro-doc that's more meaningful than the enclosing
+    // declaration the AST would report (a trailing marker inside
+    // `function outer()` should be labelled after the line, not "outer").
+    const detected = detectElement(stripTrailingAnnotation(lines[lineIndex] ?? ''));
+    if (detected) {
+      name = detected.name;
+    } else if (hasAstSupport(langConfig.grammarId)) {
+      const astResult = resolveScopeViaAst(content, langConfig.grammarId, lineIndex, true);
+      if (astResult) name = astResult.name;
+    }
 
-/**
- * Resolve scope for an inline annotation — the code is on the same line.
- * Strip the comment, detect the element, figure out if it starts a block.
- */
-function resolveInlineScope(lines: string[], lineIndex: number): ScopeResult | null {
-  const line = lines[lineIndex];
-  // Strip trailing comment to get the code portion. This is a best-effort
-  // strip for the regex fallback path only — the tokenizer already knows
-  // precisely where the comment starts, but by the time we're here we only
-  // have raw lines, so we re-derive it with the same broad patterns as
-  // before rather than threading the exact column through (kept simple
-  // since this is fallback-tier code, not the primary detection path).
-  const codePart = line.replace(/\s*\/\/\s*@(?:syndocs|synd).*$/, '')
-                       .replace(/\s*#\s*@(?:syndocs|synd).*$/, '')
-                       .replace(/\s*--\s*@(?:syndocs|synd).*$/, '')
-                       .replace(/\s*\/\*\s*@(?:syndocs|synd).*\*\/\s*$/, '')
-                       .replace(/\s*<!--\s*@(?:syndocs|synd).*-->\s*$/, '')
-                       .trim();
-
-  // Try to identify the element
-  const detected = detectElement(codePart);
-  if (!detected) return null;
-
-  // Check if this line opens a block (has an opening brace or colon for Python)
-  if (codePart.includes('{') || codePart.endsWith(':')) {
-    // Find the closing brace/block
-    const endLine = findBlockEnd(lines, lineIndex);
     return {
-      name: detected.name,
-      kind: detected.kind,
+      name: name ?? `line-L${lineIndex + 1}`,
+      kind: 'line',
       startLine: lineIndex,
-      endLine: endLine,
+      endLine: lineIndex + 1,
     };
   }
 
-  // Single-line scope
-  return {
-    name: detected.name,
-    kind: detected.kind,
-    startLine: lineIndex,
-    endLine: lineIndex + 1,
-  };
+  // ── Above (full-line) annotation: the immediately following code block.
+  // The AST tier resolves the next named sibling after the comment — i.e.
+  // the block the annotation precedes, never the block it sits inside.
+  if (hasAstSupport(langConfig.grammarId)) {
+    const astResult = resolveScopeViaAst(content, langConfig.grammarId, lineIndex, false);
+    if (astResult) return astResult;
+  }
+
+  return resolveAboveScope(lines, lineIndex);
+}
+
+/**
+ * Strip a trailing `@synd`/`@syndocs` comment off a line, leaving the code.
+ * Best-effort across the comment styles SynDocs supports — used only to give
+ * a single-line micro-doc a nicer auto-generated label.
+ */
+function stripTrailingAnnotation(line: string): string {
+  return line
+    .replace(/\s*\/\/\s*@(?:syndocs|synd).*$/, '')
+    .replace(/\s*#\s*@(?:syndocs|synd).*$/, '')
+    .replace(/\s*--\s*@(?:syndocs|synd).*$/, '')
+    .replace(/\s*\/\*\s*@(?:syndocs|synd).*\*\/\s*$/, '')
+    .replace(/\s*<!--\s*@(?:syndocs|synd).*-->\s*$/, '')
+    .trim();
 }
 
 /**
