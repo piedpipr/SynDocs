@@ -18,16 +18,21 @@ import { HTML_TEMPLATE } from '../web/html';
 import { INTERNAL_GUIDES } from '../web/internal-docs';
 import {
   computeHash,
+  extractMicroDocCode,
+  getCodeBlockLang,
+  getCommentSyntax,
   getLangConfig,
   getMirrorPath,
   getSourceFromMirror,
   parseAnchors,
   parseMirrorDoc,
   renderMirrorDoc,
+  renderNewMirrorDoc,
   hashPassword,
   verifyPassword,
   generateSessionToken,
   verifySessionToken,
+  DocSection,
 } from '@syndocs/core';
 import {
   SynDocsConfig,
@@ -57,7 +62,7 @@ export interface DocNode {
   label: string;
   status: 'ok' | 'stale' | 'missing' | 'none';
   group: string;
-  type: 'doc' | 'microdoc' | 'guide';
+  type: 'doc' | 'microdoc' | 'guide' | 'external';
   targetLabel?: string;
   lineCount?: number;
   microCount?: number;
@@ -77,7 +82,7 @@ export interface DocEntry {
   title: string;
   content: string;
   status: string;
-  type: 'doc' | 'microdoc' | 'guide';
+  type: 'doc' | 'microdoc' | 'guide' | 'external';
   sourceFile: string;
   codeCopy?: string;
   codeLanguage?: string;
@@ -255,6 +260,85 @@ export async function runServe(opts: ServeOptions): Promise<void> {
       return;
     }
 
+    // ── Annotation Insertion Endpoint ─────────────────────────────────────
+    // Writes a new @synd marker comment into the real source file at the
+    // requested line(s), then re-runs the normal init/update pipeline for
+    // that one file so the mirror doc gains the matching (empty) micro-doc
+    // section. Never alters existing code — only inserts comment lines, or
+    // appends a trailing comment to a line.
+    //
+    // modes:
+    //   'inline' — single line: append `<comment> @synd` to end of that line
+    //   'above'  — multi-line: insert `<comment> @synd` above the first line
+    //   'block'  — multi-line: 'above' plus `<comment> @endsynd` after last
+    if (pathname === '/api/annotation/add' && req.method === 'POST') {
+      const authHeader = req.headers.authorization ?? '';
+      const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+      const isAuthenticated = token ? verifySessionToken(token, sessionSecret) : false;
+
+      if (!isAuthenticated) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'Unauthorized: invalid or expired access code session' }));
+        return;
+      }
+
+      const body = await readBodyJson(req);
+      const relPath = String(body?.path ?? '');
+      const startLine = Number(body?.startLine ?? 0);
+      const endLine = Number(body?.endLine ?? startLine);
+      const mode = String(body?.mode ?? 'inline');
+
+      const result = addAnnotationToSource(cwd, config, relPath, startLine, endLine, mode);
+      if (result.ok) {
+        data = await buildData(cwd, config);
+        broadcast('reload');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result));
+      } else {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(result));
+      }
+      return;
+    }
+
+    // ── Raw File Endpoint ──────────────────────────────────────────────────
+    // Lets the Web UI's "Code" (codebase) tab show source for files that
+    // don't have a mirror doc yet — clicking an undocumented file previously
+    // did nothing (no DATA.docs entry to render). Read-only; only serves
+    // files that walkSourceFiles/buildCodebaseTree would themselves surface
+    // (recognized source language, inside cwd, not ignored), so this can't
+    // be used to read arbitrary files on the host.
+    if (pathname === '/api/file/raw' && req.method === 'GET') {
+      const relPath = parsedUrl.searchParams.get('path') ?? '';
+      const normalized = path.normalize(relPath).replace(/^([./\\]+)/, m => m.replace(/\.\./g, ''));
+      const langConfig = getLangConfig(normalized);
+      const absPath = path.resolve(cwd, normalized);
+      const withinCwd = absPath === cwd || absPath.startsWith(cwd + path.sep);
+
+      if (!relPath || !langConfig || !withinCwd || !fs.existsSync(absPath) || !fs.statSync(absPath).isFile()) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'File not found or not a recognized source file' }));
+        return;
+      }
+
+      const content = readFileSafe(absPath);
+      if (content === null) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: 'Failed to read file' }));
+        return;
+      }
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        ok: true,
+        path: normalized,
+        content,
+        language: getCodeBlockLang(normalized),
+        hasMirrorDoc: fs.existsSync(path.join(cwd, getMirrorPath(normalized, config.docsRoot))),
+      }));
+      return;
+    }
+
     // ── Static Fonts endpoint ─────────────────────────────────────────────
     if (pathname.startsWith('/fonts/')) {
       const fontFilename = path.basename(pathname);
@@ -310,6 +394,185 @@ export async function runServe(opts: ServeOptions): Promise<void> {
   });
 }
 
+// ─── Helper: Insert a @synd annotation marker into a real source file ────────
+
+interface AddAnnotationResult {
+  ok: boolean;
+  error?: string;
+  /** Labels of micro-doc sections that exist now but didn't before. */
+  newLabels?: string[];
+  /** The doc id (source path) whose mirror doc was updated. */
+  docId?: string;
+}
+
+/**
+ * Write a new `@synd` marker comment into a source file and regenerate that
+ * file's mirror doc so the new (empty) micro-doc section exists and is
+ * immediately editable in the Web UI.
+ *
+ * Guarantees:
+ *  - Only ever *inserts* whole comment lines, or appends a trailing comment
+ *    to the end of an existing line. Existing code is never rewritten or
+ *    reformatted, so this cannot alter program behavior.
+ *  - Existing notes in the mirror doc are preserved (same merge strategy
+ *    `syndocs update` uses): sections are matched by label and only their
+ *    code/hash are refreshed.
+ *
+ * modes:
+ *  - 'inline' (single line)  → append ` <comment> @synd` to that line
+ *  - 'above'  (multi-line)   → insert `<comment> @synd` above the first line
+ *  - 'block'  (multi-line)   → 'above', plus `<comment> @endsynd` after the
+ *                              last line, marking an explicit block range
+ */
+function addAnnotationToSource(
+  cwd: string,
+  config: SynDocsConfig,
+  relPath: string,
+  startLine: number,
+  endLine: number,
+  mode: string,
+): AddAnnotationResult {
+  try {
+    if (!relPath) return { ok: false, error: 'No file path provided' };
+
+    // Path safety: must resolve inside cwd and be a known source language.
+    const normalized = path.normalize(relPath).replace(/^([./\\]+)/, m => m.replace(/\.\./g, ''));
+    const absPath = path.resolve(cwd, normalized);
+    if (absPath !== cwd && !absPath.startsWith(cwd + path.sep)) {
+      return { ok: false, error: 'Path outside project root' };
+    }
+    const langConfig = getLangConfig(normalized);
+    if (!langConfig) return { ok: false, error: 'Not a recognized source file' };
+    if (!fs.existsSync(absPath)) return { ok: false, error: 'File not found' };
+
+    const comment = getCommentSyntax(normalized);
+    if (!comment) return { ok: false, error: 'No known comment syntax for this language' };
+
+    const original = readFileSafe(absPath);
+    if (original === null) return { ok: false, error: 'Failed to read file' };
+
+    // Preserve the file's existing newline style so inserting a marker
+    // doesn't rewrite every line ending on CRLF checkouts.
+    const newline = original.includes('\r\n') ? '\r\n' : '\n';
+    const lines = original.split(/\r?\n/);
+
+    // Incoming line numbers are 1-based (matching what the UI displays).
+    const startIdx = Math.max(0, Math.min(lines.length - 1, startLine - 1));
+    const endIdx = Math.max(startIdx, Math.min(lines.length - 1, endLine - 1));
+
+    const indentOf = (line: string) => (line.match(/^[ \t]*/)?.[0] ?? '');
+    const marker = (body: string, indent: string) =>
+      `${indent}${comment.prefix} ${body}${comment.suffix}`;
+
+    // Capture which micro-doc labels already existed so we can report only
+    // the newly created one back to the UI.
+    const mirrorRel = getMirrorPath(normalized, config.docsRoot);
+    const mirrorAbs = path.join(cwd, mirrorRel);
+    const existingDoc = fs.existsSync(mirrorAbs)
+      ? parseMirrorDoc(readFileSafe(mirrorAbs) ?? '')
+      : null;
+    const labelsBefore = new Set(
+      (existingDoc?.sections ?? [])
+        .filter(s => s.kind === 'micro' && s.label)
+        .map(s => s.label as string),
+    );
+
+    if (mode === 'inline') {
+      // Trailing marker on a single line — scopes to that line/block.
+      if (/@synd\b(?!ocs)/.test(lines[startIdx])) {
+        return { ok: false, error: 'That line already has a @synd annotation' };
+      }
+      lines[startIdx] = `${lines[startIdx]} ${comment.prefix} @synd${comment.suffix}`;
+    } else if (mode === 'above' || mode === 'block') {
+      const indent = indentOf(lines[startIdx]);
+      // Only reject if the line directly above is itself a *micro* @synd
+      // marker (i.e. would collide with the one we're about to add). A
+      // file-level `@syndocs` header — which by design sits at the top of
+      // the file, often immediately above the first declaration — is not a
+      // conflict, so match the marker word precisely rather than doing a
+      // loose `.includes('@synd')` substring test (which also matched
+      // "@syndocs" and made annotating the first declaration impossible).
+      const prevLine = startIdx > 0 ? lines[startIdx - 1] : '';
+      if (/@synd\b(?!ocs)/.test(prevLine)) {
+        return { ok: false, error: 'There is already a @synd annotation above that line' };
+      }
+      if (mode === 'block') {
+        // Insert the end marker first so the start insertion doesn't shift
+        // the end index out from under us.
+        lines.splice(endIdx + 1, 0, marker('@endsynd', indentOf(lines[endIdx])));
+      }
+
+      // The tokenizer merges *consecutive* comment lines into a single
+      // comment span, and only the first @synd-family marker in a span is
+      // read. So inserting `// @synd` directly beneath an existing comment
+      // (very common — the file-level `// @syndocs` header, or a JSDoc
+      // block above a declaration) would silently produce no micro-doc at
+      // all. A blank separator line keeps it as its own span.
+      const prevIsComment = prevLine.trim() !== '' &&
+        new RegExp('^\\s*' + comment.prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).test(prevLine);
+      const toInsert = prevIsComment
+        ? ['', marker('@synd', indent)]
+        : [marker('@synd', indent)];
+      lines.splice(startIdx, 0, ...toInsert);
+    } else {
+      return { ok: false, error: `Unknown annotation mode: ${mode}` };
+    }
+
+    const updatedSource = lines.join(newline);
+    writeFile(absPath, updatedSource);
+
+    // ── Regenerate the mirror doc for just this file ──────────────────────
+    // Same merge strategy as `syndocs update`: match sections by label,
+    // refresh code/hash, keep notes.
+    const lang = getCodeBlockLang(normalized);
+    const currentHash = computeHash(updatedSource);
+    const anchors = parseAnchors(updatedSource, langConfig, { filePath: normalized });
+
+    const newSections: DocSection[] = [];
+
+    const existingWhole = existingDoc?.sections.find(s => s.kind === 'whole-file');
+    newSections.push({
+      kind: 'whole-file',
+      hash: currentHash,
+      codeCopy: updatedSource,
+      codeLanguage: lang,
+      notes: existingWhole?.notes ?? '',
+    });
+
+    const microAnchors = anchors.filter(a => a.kind === 'micro' && a.label);
+    for (const anchor of microAnchors) {
+      const nextAnchor = anchors.find(a => a.lineIndex > anchor.lineIndex);
+      const microCode = extractMicroDocCode(updatedSource, anchor, nextAnchor?.lineIndex);
+      const existingSection = existingDoc?.sections.find(
+        s => s.kind === 'micro' && s.label === anchor.label,
+      );
+      newSections.push({
+        kind: 'micro',
+        label: anchor.label!,
+        hash: computeHash(microCode),
+        codeCopy: microCode,
+        codeLanguage: lang,
+        notes: existingSection?.notes ?? '',
+        elementKind: anchor.elementKind,
+        elementName: anchor.elementName,
+        scopeStartLine: anchor.scopeStartLine,
+        scopeEndLine: anchor.scopeEndLine,
+      });
+    }
+
+    const title = existingDoc?.title ?? (normalized.split('/').pop() ?? normalized);
+    writeFile(mirrorAbs, renderMirrorDoc({ title, sections: newSections }));
+
+    const newLabels = microAnchors
+      .map(a => a.label as string)
+      .filter(l => !labelsBefore.has(l));
+
+    return { ok: true, docId: normalized, newLabels };
+  } catch (err: any) {
+    return { ok: false, error: err?.message ?? 'Failed to add annotation' };
+  }
+}
+
 // ─── Helper: Save edited notes to disk ────────────────────────────────────────
 
 function saveDocumentNotes(
@@ -350,7 +613,28 @@ function saveDocumentNotes(
     // Whole-file doc
     const mirrorRel = getMirrorPath(id, config.docsRoot);
     const mirrorAbs = path.join(cwd, mirrorRel);
-    if (!fs.existsSync(mirrorAbs)) return false;
+
+    if (!fs.existsSync(mirrorAbs)) {
+      // No mirror doc exists yet for this file — this happens when notes
+      // are added from the Web UI's "Code" (codebase) tab to a file that
+      // has never been through `syndocs init`/annotated with @synd markers.
+      // Create a fresh mirror doc on the spot instead of refusing, so
+      // "click an undocumented file, write notes, save" works end-to-end
+      // without requiring a CLI round-trip first.
+      const sourceAbs = path.join(cwd, id);
+      if (!fs.existsSync(sourceAbs) || !getLangConfig(id)) return false;
+      const sourceContent = readFileSafe(sourceAbs);
+      if (sourceContent === null) return false;
+
+      const hash = computeHash(sourceContent);
+      const lang = getCodeBlockLang(id);
+      const fresh = renderNewMirrorDoc(id, sourceContent, lang, hash, []);
+      const parsed = parseMirrorDoc(fresh);
+      const wholeSection = parsed.sections.find(s => s.kind === 'whole-file');
+      if (wholeSection) wholeSection.notes = editedNotes;
+      writeFile(mirrorAbs, renderMirrorDoc(parsed));
+      return true;
+    }
 
     const raw = readFileSafe(mirrorAbs);
     if (!raw) return false;
@@ -596,7 +880,16 @@ async function buildData(cwd: string, config: SynDocsConfig): Promise<SynDocsDat
         label,
         status: 'none',   // no mirror doc — shown as a dim node in the graph
         group,
-        type: 'doc',
+        // Deliberately NOT type:'doc' — these are synthetic placeholders for
+        // CodeGraph edge endpoints that don't have a real mirror doc (often
+        // just a bare filename CodeGraph couldn't fully resolve to a project
+        // path, e.g. "adapter.ts" instead of "packages/graph/src/adapter.ts").
+        // They exist purely so the graph can render a dim node for them.
+        // buildDocsTree() only picks up type:'doc'/'microdoc'/'guide', so
+        // using a distinct type keeps these out of the Docs tab tree, where
+        // they previously showed up as bogus root-level "status: none"
+        // entries with the wrong (unresolved, directory-less) path.
+        type: 'external',
       });
       nodeIds.add(fileId);
     }

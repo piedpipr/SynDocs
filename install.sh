@@ -314,10 +314,14 @@ build_and_link() {
     (
         cd packages/cli
         npm exec tsc -- --noEmitOnError
+        node scripts/copy-web-assets.js
     )
 
     CLI_ENTRY="${INSTALL_DIR}/packages/cli/dist/index.js"
     [[ -f "${CLI_ENTRY}" ]] || die "CLI build completed but ${CLI_ENTRY} was not created."
+
+    WEB_ASSET="${INSTALL_DIR}/packages/cli/dist/web/assets/shell.html"
+    [[ -f "${WEB_ASSET}" ]] || die "CLI build completed but Web UI assets were not copied to dist/web/assets."
 
     chmod +x "${CLI_ENTRY}"
     success "syndocs CLI built successfully"

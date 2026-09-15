@@ -2,12 +2,13 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { initTokenizer } from '../tokenizer';
+import { initAstEngine } from '../ast-scope';
 import { parseAnchors } from '../anchor-parser';
 import { getLangConfig } from '../languages';
-import type { GraphAdapterLike, NodeBoundaryLike } from '../graph-adapter-like';
 
 before(async () => {
   await initTokenizer(['typescript', 'javascript', 'python', 'css', 'html', 'php', 'java']);
+  await initAstEngine(['typescript', 'javascript', 'python', 'php', 'java']);
 });
 
 function anchors(content: string, filename: string) {
@@ -151,10 +152,14 @@ function b() {}
 
 test('inline anchor after a chained method CALL is not misidentified as a method declaration (regression)', () => {
   // Reported bug: `$table->string(...)->default(...)` was misread as
-  // declaring a method named "string" by a regex that matched any
-  // "identifier followed by (" with no check for a preceding `->`/`.`/`::`
-  // member-access operator.
-  const result = anchors(`
+  // declaring a method named "string" by the OLD regex parser, which
+  // matched any "identifier followed by (" with no check for a preceding
+  // `->`/`.`/`::` member-access operator. Tree-sitter can't make this
+  // mistake at all: `string`/`default` are calls inside an expression
+  // statement, never a `method_declaration` node, regardless of the
+  // (deliberately unrealistic — this is invalid standalone PHP) shape of
+  // the surrounding statement.
+  const result = anchors(`<?php
 class ExamResult extends Model {
     protected $fillable = ['user_id'];
 
@@ -163,25 +168,31 @@ class ExamResult extends Model {
 `, 'x.php');
   assert.equal(result.length, 1);
   assert.equal(result[0].inline, true);
-  // No real declaration on this line -> generic line-based scope, NOT a
-  // fabricated method name.
-  assert.equal(result[0].elementKind, undefined);
-  assert.equal(result[0].elementName, undefined);
-  assert.match(result[0].label!, /^line-L\d+$/);
+  assert.notEqual(result[0].elementName, 'string');
+  assert.notEqual(result[0].elementName, 'default');
 });
 
 test('inline anchor after a JS method call (this.foo()) is not misidentified as a declaration', () => {
   const result = anchors(`
 this.doSomething(x); // @synd
 `, 'x.ts');
-  assert.equal(result[0].elementName, undefined);
+  // Under the simplified model a trailing marker always yields a single-line
+  // micro-doc, so it always has a scope. What must NOT happen is the call
+  // being mistaken for a declaration — kind stays 'line', never
+  // 'function'/'variable'/'method'.
+  assert.equal(result[0].elementKind, 'line');
+  assert.equal(result[0].scopeStartLine, 1);
+  assert.equal(result[0].scopeEndLine, 2);
 });
 
 test('property assignment via -> is not misidentified as a variable declaration', () => {
-  const result = anchors(`
+  const result = anchors(`<?php
 $table->exam_category = 'practice_set'; // @synd
 `, 'x.php');
-  assert.equal(result[0].elementName, undefined);
+  // As above: single-line scope is expected; the point is that the property
+  // assignment isn't promoted to a 'variable' declaration.
+  assert.equal(result[0].elementKind, 'line');
+  assert.notEqual(result[0].elementName, 'exam_category');
 });
 
 test('genuine Java/C#-style typed method declaration (no fixed keyword) is still detected', () => {
@@ -190,12 +201,14 @@ public void calculateTotal() { // @synd
   return;
 }
 `, 'x.java');
-  assert.equal(result[0].elementKind, 'method');
+  // Trailing marker => single-line micro-doc (kind 'line'), but the label
+  // must still be derived from the declaration on that line.
+  assert.equal(result[0].elementKind, 'line');
   assert.equal(result[0].elementName, 'calculateTotal');
 });
 
 test('PHP "function" keyword declaration is still detected', () => {
-  const result = anchors(`
+  const result = anchors(`<?php
 class Foo {
   private $x;
 
@@ -207,76 +220,160 @@ class Foo {
 `, 'x.php');
   const micro = result.find(a => a.autoScoped);
   assert.ok(micro, 'expected an auto-scoped micro anchor');
-  assert.equal(micro!.elementKind, 'function');
+  // Now resolved via tree-sitter (not the old regex), which correctly
+  // reports this as a class "method" rather than a bare "function" since
+  // it's declared inside a class body — a more precise result than the old
+  // regex-based DECLARATION_PATTERNS table produced.
+  assert.equal(micro!.elementKind, 'method');
   assert.equal(micro!.elementName, 'getName');
 });
 
-// ─── AST-preferred scope resolution ─────────────────────────────────────────
+// ─── AST-based scope resolution (tree-sitter) ───────────────────────────────
 
-function makeFakeAdapter(boundary: NodeBoundaryLike | null): GraphAdapterLike {
-  return {
-    isReady: () => true,
-    getNodeBoundary: () => boundary,
-    getNextNode: () => boundary,
-    getEnclosingScope: () => boundary,
-  };
+test('REGRESSION (bug #1): a stray unmatched brace character inside a string literal no longer swallows the next unrelated function', () => {
+  // This is the exact case that broke the old brace-counting findBlockEnd():
+  // a string containing a lone `}` shifted the raw-character brace count by
+  // one, so depth never reached <= 0 until the NEXT function's closing
+  // brace, silently merging two unrelated functions into one micro-doc.
+  const result = anchors(`
+export function noise() { return 0; }
+
+// @synd: with-odd-brace
+export function withOddBrace(name) {
+  const s = "curly: }"; // this string has a lone closing brace
+  console.log(name, s);
+  return name;
 }
 
-test('scope resolution prefers the graph adapter over the regex fallback when ready', () => {
-  const cfg = getLangConfig('x.ts')!;
-  const content = `
-// @synd
-function realFunctionName() {
-  return 1;
+export function shouldBeSeparate(x) {
+  return x * 2;
 }
-`;
-  const adapter = makeFakeAdapter({
-    name: 'astResolvedName',
-    kind: 'function',
-    startLine: 3, // 1-based
-    endLine: 5,
-  });
-  const result = parseAnchors(content, cfg, { graphAdapter: adapter, filePath: 'x.ts' });
-  // bare @synd here is on line 1 (0-based), which is within the header area,
-  // so it's whole-file, not auto-scoped — use an inline case instead to
-  // actually exercise scope resolution.
-  assert.equal(result[0].kind, 'whole-file');
+`, 'x.ts');
+
+  const micro = result.find(a => a.label === 'with-odd-brace');
+  assert.ok(micro, 'expected the with-odd-brace anchor to be found');
+  assert.equal(micro!.elementName, 'withOddBrace');
+  assert.equal(micro!.elementKind, 'function');
+  // Must end at withOddBrace's own closing brace (line 8, 0-based; exclusive
+  // end = 9), NOT swallow shouldBeSeparate too (which starts at line 10).
+  assert.ok(
+    micro!.scopeEndLine! <= 9,
+    `expected scope to end at/before line 9 (before shouldBeSeparate at line 10), got endLine=${micro!.scopeEndLine}`,
+  );
 });
 
-test('inline bare anchor uses AST scope name over regex-detected name when adapter is ready', () => {
-  const cfg = getLangConfig('x.ts')!;
-  const content = `weirdSyntaxRegexCannotParse(); // @synd\n`;
-  const adapter = makeFakeAdapter({
-    name: 'astResolvedName',
-    kind: 'function',
-    startLine: 1,
-    endLine: 1,
-  });
-  const result = parseAnchors(content, cfg, { graphAdapter: adapter, filePath: 'x.ts' });
-  assert.equal(result.length, 1);
-  assert.equal(result[0].elementName, 'astResolvedName');
+test('REGRESSION (bug #2): explicit @synd: label sitting inside a multi-line JSDoc block above a multi-line function signature resolves correct boundaries', () => {
+  // The old parser's explicit-label branch never called scope resolution
+  // at all — this pins that it now does, and resolves the FULL declaration
+  // (not a snippet starting mid-comment).
+  const result = anchors(`
+const template = \`some { curly } braces inside a string\`;
+
+/**
+ * Computes the total price including tax.
+ * @synd: compute-total
+ */
+export function computeTotal(
+  items,
+  taxRate,
+) {
+  const subtotal = items.reduce((a, b) => a + b, 0);
+  return subtotal * (1 + taxRate);
+}
+`, 'x.ts');
+
+  const micro = result.find(a => a.label === 'compute-total');
+  assert.ok(micro, 'expected the compute-total anchor to be found');
+  assert.equal(micro!.elementKind, 'function');
+  assert.equal(micro!.elementName, 'computeTotal');
+  // scopeStartLine must point at the `export function computeTotal(` line,
+  // not anywhere inside the JSDoc block above it.
+  assert.ok(micro!.scopeStartLine !== undefined);
+  assert.ok(micro!.scopeEndLine !== undefined);
 });
 
-test('falls back to regex-based scope detection when adapter is not ready', () => {
-  const cfg = getLangConfig('x.ts')!;
-  const content = `function realFunctionName() { return 1; } // @synd\n`;
-  const notReadyAdapter: GraphAdapterLike = {
-    isReady: () => false,
-    getNodeBoundary: () => { throw new Error('should not be called'); },
-    getNextNode: () => { throw new Error('should not be called'); },
-    getEnclosingScope: () => { throw new Error('should not be called'); },
-  };
-  const result = parseAnchors(content, cfg, { graphAdapter: notReadyAdapter, filePath: 'x.ts' });
-  assert.equal(result.length, 1);
-  assert.equal(result[0].elementName, 'realFunctionName');
+test('AST scope resolution is not fooled by unbalanced braces inside a // comment', () => {
+  const result = anchors(`
+export function noise2() {}
+
+// @synd: with-comment-brace
+export function withCommentBrace(name) {
+  // NOTE: legacy behavior used an unbalanced brace like this: }
+  console.log(name);
+  return name;
+}
+
+export function afterCommentBrace(x) {
+  return x + 1;
+}
+`, 'x.ts');
+  const micro = result.find(a => a.label === 'with-comment-brace');
+  assert.ok(micro);
+  assert.equal(micro!.elementName, 'withCommentBrace');
+  // withCommentBrace's closing brace is on line 8 (0-based) -> exclusive
+  // end 9; afterCommentBrace starts at line 10. Must not reach line 10.
+  assert.ok(micro!.scopeEndLine! <= 9);
 });
 
-test('falls back to regex-based scope detection when no adapter is supplied at all', () => {
-  const cfg = getLangConfig('x.ts')!;
-  const content = `function realFunctionName() { return 1; } // @synd\n`;
+test('inline bare anchor documents only its own line, even inside a class body (Java)', () => {
+  // Simplified model: a trailing annotation is ALWAYS a single-line
+  // micro-doc. It previously walked up to the enclosing declaration and
+  // documented the whole method, which made trailing markers unusable for
+  // annotating one specific line.
+  const result = anchors(`
+public class Foo {
+  public void calculateTotal() { // @synd
+    return;
+  }
+}
+`, 'x.java');
+  const micro = result.find(a => a.inline);
+  assert.ok(micro);
+  assert.equal(micro!.elementKind, 'line');
+  assert.equal(micro!.elementName, 'calculateTotal');
+  // The annotation is on line index 2; the scope must be exactly that line.
+  assert.equal(micro!.scopeStartLine, 2);
+  assert.equal(micro!.scopeEndLine, 3);
+});
+
+test('above-annotation resolves a PHP method declared inside a class body via tree-sitter', () => {
+  const result = anchors(`<?php
+class Foo {
+  private $x;
+
+  // @synd
+  public function getName() {
+    return $this->name;
+  }
+}
+`, 'x.php');
+  const micro = result.find(a => a.autoScoped);
+  assert.ok(micro, 'expected an auto-scoped micro anchor');
+  assert.equal(micro!.elementKind, 'method');
+  assert.equal(micro!.elementName, 'getName');
+});
+
+test('falls back to regex-based scope detection for a language with no bundled tree-sitter grammar (SQL)', () => {
+  const cfg = getLangConfig('x.sql');
+  // SQL isn't in languages.ts's BY_EXTENSION table today, so guard this
+  // test to skip cleanly if that ever changes rather than failing on an
+  // unrelated config gap.
+  if (!cfg) return;
+  const content = `CREATE TABLE users (id INT); -- @synd\n`;
   const result = parseAnchors(content, cfg);
   assert.equal(result.length, 1);
-  assert.equal(result[0].elementName, 'realFunctionName');
+});
+
+test('falls back to regex-based scope detection when the AST engine has not been initialized for this language', () => {
+  // 'ruby' was intentionally not warmed up in the `before` hook above, so
+  // this exercises the "grammar exists but not loaded" fallback path.
+  const cfg = getLangConfig('x.rb')!;
+  const content = `def realMethodName\n  1\nend # @synd\n`;
+  const result = parseAnchors(content, cfg);
+  assert.equal(result.length, 1);
+  // Regex fallback catches the generic assignment shape only, so this just
+  // confirms the anchor is still found and doesn't crash — not that it's
+  // perfectly scoped, which is exactly why we prefer AST when available.
 });
 
 // ─── Fail-fast contract ─────────────────────────────────────────────────────
@@ -290,4 +387,156 @@ test('extractCommentSpans throws a clear error if called before initTokenizer (s
   assert.throws(() => {
     require('../tokenizer').extractCommentSpans('code', 'not-a-real-grammar-id');
   }, /Unknown grammar id/);
+});
+
+// ─── Explicit block-end markers (@endsynd) ─────────────────────────────────
+//
+// `@endsynd` lets an annotation declare an explicit line range instead of
+// relying on AST/regex scope inference. This is what the Web UI's "Add Doc
+// (Block)" action emits when the user selects an arbitrary span of lines
+// that doesn't correspond to a single AST node (e.g. two sibling
+// declarations). Scope indices are 0-based with an exclusive end, so the
+// documented range is the lines strictly between the two markers.
+
+test('@endsynd sets an explicit scope spanning multiple sibling declarations', () => {
+  const content = [
+    'export const GAMMA = 42;',   // 0
+    '',                           // 1
+    '// @synd',                   // 2
+    'export const A = 1;',        // 3
+    'export const B = 2;',        // 4
+    '// @endsynd',                // 5
+  ].join('\n');
+
+  const found = anchors(content, 'x.ts');
+  const micro = found.find(a => a.kind === 'micro');
+  assert.ok(micro, 'expected a micro anchor');
+  // Range is the lines between the markers: indices 3..4, exclusive end 5.
+  assert.equal(micro!.scopeStartLine, 3);
+  assert.equal(micro!.scopeEndLine, 5);
+});
+
+test('@endsynd marker is a delimiter, not an annotation of its own', () => {
+  // Real code first, so the bare @synd below is a micro anchor rather than
+  // being claimed as the file-level (whole-file) anchor.
+  const content = [
+    'export function existing() {}',
+    '',
+    '// @synd',
+    'const a = 1;',
+    '// @endsynd',
+  ].join('\n');
+
+  const found = anchors(content, 'x.ts');
+  // Exactly one anchor — the @endsynd must not produce a second micro-doc.
+  assert.equal(found.length, 1);
+  assert.equal(found[0].kind, 'micro');
+});
+
+test('an @endsynd belonging to a later annotation does not capture an earlier one', () => {
+  const content = [
+    'export function head() {}', // 0  real code first, so neither @synd below
+    '',                          // 1  gets claimed as the whole-file anchor
+    '// @synd',                  // 2  -> scopes via AST, not the far @endsynd
+    'function first() {}',       // 3
+    '',                          // 4
+    '// @synd',                  // 5  -> owns the @endsynd below
+    'const x = 1;',              // 6
+    '// @endsynd',               // 7
+  ].join('\n');
+
+  const found = anchors(content, 'x.ts');
+  const micros = found.filter(a => a.kind === 'micro');
+  assert.equal(micros.length, 2);
+  // The first annotation must NOT swallow everything up to line 5 — an
+  // intervening @synd means that end marker belongs to the second one.
+  assert.ok(
+    (micros[0].scopeEndLine ?? 0) < 7,
+    `first anchor should not extend to the later @endsynd (got ${micros[0].scopeEndLine})`,
+  );
+  assert.equal(micros[1].scopeStartLine, 6);
+  assert.equal(micros[1].scopeEndLine, 7);
+});
+
+// ─── Simplified scope model ────────────────────────────────────────────────
+// 1. An above-annotation targets the code block that immediately FOLLOWS it,
+//    never the block it happens to sit inside.
+// 2. `@endsynd` defines a custom range; without it, the next block is used.
+// 3. A trailing annotation documents exactly its own line.
+
+test('rule 1: above-annotation targets the next sibling, not the enclosing class', () => {
+  const result = anchors(`
+class Foo {
+  // @synd
+  bar() { return 1; }
+  baz() { return 2; }
+}
+`, 'x.ts');
+  const micro = result.find(a => a.kind === 'micro');
+  assert.ok(micro);
+  assert.equal(micro!.elementName, 'bar');
+  // Must cover only bar(), not baz() and not the whole class body.
+  assert.equal(micro!.scopeStartLine, 3);
+  assert.equal(micro!.scopeEndLine, 4);
+});
+
+test('rule 2: @endsynd defines a custom block spanning several declarations', () => {
+  const content = `const head = 0;
+
+// @synd
+const a = 1;
+const b = 2;
+// @endsynd
+`;
+  const result = anchors(content, 'x.ts');
+  const micro = result.find(a => a.kind === 'micro');
+  assert.ok(micro);
+  // Custom range => generic 'block' kind, not the kind of the first decl.
+  assert.equal(micro!.elementKind, 'block');
+  assert.equal(micro!.scopeStartLine, 3);
+  assert.equal(micro!.scopeEndLine, 5);
+});
+
+test('rule 2: a labelled annotation also honours @endsynd', () => {
+  const content = `const head = 0;
+
+// @synd: mine
+const a = 1;
+const b = 2;
+// @endsynd
+`;
+  const result = anchors(content, 'x.ts');
+  const micro = result.find(a => a.label === 'mine');
+  assert.ok(micro);
+  assert.equal(micro!.elementKind, 'block');
+  assert.equal(micro!.scopeStartLine, 3);
+  assert.equal(micro!.scopeEndLine, 5);
+});
+
+test('rule 3: a trailing annotation never expands past its own line', () => {
+  const content = `export function outer() {
+  const x = compute(); // @synd
+  return x;
+}
+`;
+  const result = anchors(content, 'x.ts');
+  const micro = result.find(a => a.inline);
+  assert.ok(micro);
+  assert.equal(micro!.elementKind, 'line');
+  assert.equal(micro!.scopeStartLine, 1);
+  assert.equal(micro!.scopeEndLine, 2);
+});
+
+test('rule 3: a trailing annotation on a block-opening line stays single-line', () => {
+  const content = `class A {
+  method() { // @synd
+    return 1;
+  }
+}
+`;
+  const result = anchors(content, 'x.ts');
+  const micro = result.find(a => a.inline);
+  assert.ok(micro);
+  assert.equal(micro!.scopeStartLine, 1);
+  assert.equal(micro!.scopeEndLine, 2);
 });

@@ -7,7 +7,7 @@
   },
   "main": "./dist/index.js",
   "scripts": {
-    "build": "tsc"
+    "build": "tsc && node scripts/copy-web-assets.js"
   },
   "dependencies": {
     "@syndocs/core": "*",

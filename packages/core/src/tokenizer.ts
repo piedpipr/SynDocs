@@ -108,10 +108,13 @@ function getHighlighterOrThrow(): Highlighter {
  * many lines) as a `CommentSpan`.
  *
  * Throws only if the tokenizer hasn't been initialized (programming error).
- * If the grammar itself fails to tokenize a given file (malformed input,
- * grammar edge case), callers should catch and fall back — see
- * `anchor-parser.ts`'s `parseAnchors`, which does exactly this per-file so
- * one bad file can't take down a whole `syndocs check`/`update` run.
+ * Grammar-level crashes (e.g. the shiki/vscode-textmate `startIndex` bug
+ * triggered by PHP anonymous classes) are caught internally and handled by
+ * `extractCommentSpansRegex` — a language-aware regex scanner that correctly
+ * merges consecutive line comments and handles block comments. This keeps the
+ * error contained here rather than propagating to anchor-parser.ts's rough
+ * last-resort fallback, and eliminates the "grammar tokenization failed"
+ * warning for affected files.
  */
 export function extractCommentSpans(content: string, grammarId: string): CommentSpan[] {
   const hl = getHighlighterOrThrow();
@@ -127,10 +130,21 @@ export function extractCommentSpans(content: string, grammarId: string): Comment
       `This indicates a bug in languages.ts's BY_EXTENSION table, not a caller error.`,
     );
   }
-  const lines = hl.codeToTokensBase(content, {
-    lang: grammarId as Parameters<Highlighter['codeToTokensBase']>[1]['lang'],
-    includeExplanation: true,
-  });
+
+  let lines: ReturnType<typeof hl.codeToTokensBase>;
+  try {
+    lines = hl.codeToTokensBase(content, {
+      lang: grammarId as Parameters<Highlighter['codeToTokensBase']>[1]['lang'],
+      includeExplanation: true,
+    });
+  } catch {
+    // shiki/vscode-textmate grammar bug — reproduced with PHP anonymous-class
+    // syntax (`return new class extends X { ... }`), which causes the
+    // explanation builder to read `.startIndex` off an undefined scope entry.
+    // Fall back to a language-aware regex scanner rather than letting the
+    // error propagate to anchor-parser.ts's rough last-resort handler.
+    return extractCommentSpansRegex(content, grammarId);
+  }
 
   const spans: CommentSpan[] = [];
   // The scope name of the currently-open multi-line comment run (e.g.
@@ -208,5 +222,155 @@ export function extractCommentSpans(content: string, grammarId: string): Comment
   }
   if (open) spans.push(open);
 
+  return spans;
+}
+
+// ─── Regex fallback (used when shiki grammar crashes) ─────────────────────────
+
+/**
+ * Language-aware regex comment scanner, activated when `codeToTokensBase`
+ * throws for a specific file (e.g. PHP anonymous-class startIndex bug).
+ *
+ * Handles:
+ *   `//`          single-line  — JS, TS, PHP, Java, C, C++, Go, Rust, Swift, Kotlin, C#
+ *   `/* ... *\/`  block        — same C-family languages
+ *   `#`           single-line  — Python, Ruby, Shell, YAML, Dockerfile
+ *   `--`          single-line  — SQL, Lua
+ *   `<!-- -->`    block        — HTML, XML
+ *
+ * Consecutive same-marker full-line comments are merged into a single
+ * CommentSpan (mirrors `isContinuationOfOpenRun` in the shiki path), so a
+ * multi-line `// block` ending with `// @synd` arrives as one span with full
+ * text — exactly the shape anchor-parser.ts expects.
+ *
+ * Inline trailing comments (code before the marker) are never merged; each
+ * is its own single-line span, same as the shiki tokenizer produces.
+ */
+function extractCommentSpansRegex(content: string, grammarId: string): CommentSpan[] {
+  const rawLines = content.split('\n');
+  const spans: CommentSpan[] = [];
+
+  // Which comment forms does this grammar use?
+  const slashSlash = new Set(['javascript','typescript','jsx','tsx','php','java','c','cpp',
+                               'csharp','go','rust','swift','kotlin','css','scss','sass']);
+  const hashStyle  = new Set(['python','ruby','shellscript','yaml','dockerfile']);
+  const dashDash   = new Set(['sql','lua']);
+  const htmlStyle  = new Set(['html','xml']);
+  const blockSlash = new Set([...slashSlash]); // /* */ mirrors // languages
+
+  const useSlash = slashSlash.has(grammarId);
+  const useHash  = hashStyle.has(grammarId);
+  const useDash  = dashDash.has(grammarId);
+  const useBlock = blockSlash.has(grammarId);
+  const useHtml  = htmlStyle.has(grammarId);
+
+  let open: CommentSpan | null = null;
+  let openMarker: string | null = null;
+  let i = 0;
+
+  while (i < rawLines.length) {
+    const line = rawLines[i]!;
+    const trimmed = line.trimStart();
+    const leadingSpaces = line.length - trimmed.length;
+
+    // ── Block comment: /* ... */ ─────────────────────────────────────────────
+    if (useBlock && trimmed.startsWith('/*')) {
+      if (open) { spans.push(open); open = null; openMarker = null; }
+
+      const blockStartLine = i;
+      const blockCol       = leadingSpaces;
+      let blockText        = '';
+      const isFull         = line.slice(0, leadingSpaces).trim().length === 0;
+
+      while (i < rawLines.length) {
+        const bLine = rawLines[i]!;
+        blockText += (blockText ? '\n' : '') + bLine;
+        if (bLine.includes('*/')) { i++; break; }
+        i++;
+      }
+
+      spans.push({
+        startLine: blockStartLine,
+        endLine:   i - 1,
+        startColumn: blockCol,
+        text: blockText,
+        isFullLineStart: isFull,
+      });
+      continue;
+    }
+
+    // ── Block comment: <!-- ... --> ──────────────────────────────────────────
+    if (useHtml && trimmed.startsWith('<!--')) {
+      if (open) { spans.push(open); open = null; openMarker = null; }
+
+      const blockStartLine = i;
+      let blockText = '';
+
+      while (i < rawLines.length) {
+        blockText += (blockText ? '\n' : '') + rawLines[i]!;
+        if (rawLines[i]!.includes('-->')) { i++; break; }
+        i++;
+      }
+
+      spans.push({
+        startLine: blockStartLine,
+        endLine:   i - 1,
+        startColumn: leadingSpaces,
+        text: blockText,
+        isFullLineStart: true,
+      });
+      continue;
+    }
+
+    // ── Single-line markers ──────────────────────────────────────────────────
+    let marker: string | null = null;
+    let markerCol = -1;
+
+    if (useSlash) {
+      const idx = line.indexOf('//');
+      if (idx !== -1) { marker = '//'; markerCol = idx; }
+    }
+    if (!marker && useHash) {
+      const idx = line.indexOf('#');
+      if (idx !== -1) { marker = '#'; markerCol = idx; }
+    }
+    if (!marker && useDash) {
+      const idx = line.indexOf('--');
+      if (idx !== -1) { marker = '--'; markerCol = idx; }
+    }
+
+    if (marker !== null) {
+      const before = line.slice(0, markerCol);
+      const isFull = before.trim().length === 0;
+
+      const canMerge =
+        open !== null &&
+        openMarker === marker &&
+        isFull &&
+        open.isFullLineStart &&
+        open.endLine === i - 1;
+
+      if (canMerge) {
+        open!.text    += '\n' + line.slice(markerCol);
+        open!.endLine  = i;
+      } else {
+        if (open) spans.push(open);
+        open = {
+          startLine:      i,
+          endLine:        i,
+          startColumn:    markerCol,
+          text:           line.slice(markerCol),
+          isFullLineStart: isFull,
+        };
+        openMarker = marker;
+      }
+    } else {
+      if (open) { spans.push(open); open = null; openMarker = null; }
+    }
+
+    i++;
+  }
+
+  if (open) spans.push(open);
   return spans;
 }

@@ -15,13 +15,11 @@ import {
 } from '@syndocs/core';
 import {
   SynDocsConfig,
-  GraphAdapter,
   c,
   ensureDir,
   readFileSafe,
   walkSourceFiles,
   writeFile,
-  loadGraphAdapter,
 } from '../utils';
 import { execSync } from 'child_process';
 import readline from 'readline';
@@ -102,9 +100,6 @@ Run \`syndocs lint-embeds\` to validate all embed references!
     }
   }
 
-  // Load graph adapter for AST-exact micro-doc boundaries
-  const adapter: GraphAdapter = await loadGraphAdapter(cwd);
-
   // ── 1. Create docs & micro-docs ─────────────────────────────────────────────
 
   let docsCreated = 0, skipped = 0, found = 0;
@@ -114,10 +109,18 @@ Run \`syndocs lint-embeds\` to validate all embed references!
     const content = readFileSafe(absPath);
     if (!content) continue;
 
+    // Fast pre-scan: skip files that definitely have no @synd markers without
+    // paying for shiki tokenization + tree-sitter AST parsing (both are heavy
+    // operations). For a large Laravel project with hundreds of PHP files,
+    // calling parseAnchors on every file is what causes `syndocs init` to hang
+    // — the vast majority of files have no annotations and can be skipped in
+    // microseconds with a plain string search.
+    if (!content.includes('@synd')) continue;
+
     const langConfig = getLangConfig(relPath);
     if (!langConfig) continue;
 
-    const anchors = parseAnchors(content, langConfig, { graphAdapter: adapter, filePath: relPath });
+    const anchors = parseAnchors(content, langConfig, { filePath: relPath });
     if (anchors.length === 0) continue;
 
     found++;
@@ -161,8 +164,6 @@ Run \`syndocs lint-embeds\` to validate all embed references!
     console.log('  ' + c.green('+ created') + '   ' + relPath + '  \u2192  ' + c.cyan(mirrorRel));
     docsCreated++;
   }
-
-  adapter?.close();
 
   console.log('');
   console.log(

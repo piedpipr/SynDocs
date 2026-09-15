@@ -60,7 +60,11 @@ export async function runCheck(opts: CheckOptions): Promise<number> {
     const langConfig = getLangConfig(relPath);
     if (!langConfig) continue;
 
-    const anchors = parseAnchors(content, langConfig, { graphAdapter: adapter, filePath: relPath });
+    // Fast pre-scan: skip files with no @synd markers before paying for
+    // shiki tokenization + tree-sitter AST parsing.
+    if (!content.includes('@synd')) continue;
+
+    const anchors = parseAnchors(content, langConfig, { filePath: relPath });
     if (anchors.length === 0) continue;
 
     const mirrorRel = getMirrorPath(relPath, config.docsRoot);
@@ -178,7 +182,7 @@ export async function runCheck(opts: CheckOptions): Promise<number> {
       const sourceContent = readFileSafe(sourceAbs);
       const langConfig = getLangConfig(sourceRel);
       if (sourceContent && langConfig) {
-        const anchors = parseAnchors(sourceContent, langConfig, { graphAdapter: adapter, filePath: sourceRel });
+        const anchors = parseAnchors(sourceContent, langConfig, { filePath: sourceRel });
         const mirrorAbs = path.join(cwd, mirrorRel);
         const mirrorDoc = parseMirrorDoc(readFileSafe(mirrorAbs)!);
         

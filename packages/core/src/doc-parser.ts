@@ -230,19 +230,32 @@ function extractPendingDiff(lines: string[]): string | undefined {
  * The "## Notes" heading is consumed; the raw prose is returned.
  */
 function extractNotes(lines: string[]): string {
-  // Find the end of the first code block
+  // Find the end of the first code block.
+  //
+  // Bug fix: the previous version incremented codeDepth on every line
+  // matching /^```/ (including the closing fence itself), then also
+  // decremented on that same closing-fence line — a net decrement of only
+  // 1 for what should have been "open, then close" (net 0 -> stay open).
+  // codeDepth therefore never returned to 0, pastCode never became true,
+  // and "## Notes" was never found — silently discarding every saved note
+  // on the very next read (buildData() re-parses the mirror file after
+  // every save). Rewritten with a plain open/close boolean, matching the
+  // already-correct approach in extractFirstCodeBlock.
+  let inBlock = false;
   let pastCode = false;
-  let codeDepth = 0;
   let noteStart = -1;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
     if (!pastCode) {
-      if (line.match(/^```/)) codeDepth++;
-      if (codeDepth > 0 && line === '```' && i > 0) {
-        codeDepth--;
-        if (codeDepth === 0) pastCode = true;
+      if (!inBlock) {
+        if (line.match(/^```/)) inBlock = true;
+        continue;
+      }
+      if (line === '```' || line.startsWith('```')) {
+        inBlock = false;
+        pastCode = true;
       }
       continue;
     }
