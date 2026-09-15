@@ -61,3 +61,59 @@ export function getCodeBlockLang(filePath: string): string {
 export function getAllConfiguredGrammarIds(): string[] {
   return [...new Set(Object.values(BY_EXTENSION).map(cfg => cfg.grammarId))];
 }
+
+/**
+ * How to write a single-line comment in a given language.
+ *
+ * Comment *detection* is grammar-driven (see tokenizer.ts) and deliberately
+ * doesn't live in this table. But *writing* a new annotation comment into a
+ * source file (the Web UI's "Add Doc" action) needs to emit the right
+ * syntax, which a read-only grammar can't tell us — hence this small
+ * write-side map, keyed by grammarId so it stays in sync with BY_EXTENSION
+ * rather than duplicating the extension list.
+ *
+ * `prefix`/`suffix` wrap the comment body. Languages without a line-comment
+ * form (html/xml) use a block form via `suffix`.
+ */
+const COMMENT_SYNTAX_BY_GRAMMAR: Record<string, { prefix: string; suffix: string }> = {
+  javascript: { prefix: '//', suffix: '' },
+  typescript: { prefix: '//', suffix: '' },
+  jsx:        { prefix: '//', suffix: '' },
+  tsx:        { prefix: '//', suffix: '' },
+  go:         { prefix: '//', suffix: '' },
+  rust:       { prefix: '//', suffix: '' },
+  java:       { prefix: '//', suffix: '' },
+  c:          { prefix: '//', suffix: '' },
+  cpp:        { prefix: '//', suffix: '' },
+  csharp:     { prefix: '//', suffix: '' },
+  php:        { prefix: '//', suffix: '' },
+  swift:      { prefix: '//', suffix: '' },
+  kotlin:     { prefix: '//', suffix: '' },
+
+  python:      { prefix: '#', suffix: '' },
+  ruby:        { prefix: '#', suffix: '' },
+  shellscript: { prefix: '#', suffix: '' },
+  yaml:        { prefix: '#', suffix: '' },
+  dockerfile:  { prefix: '#', suffix: '' },
+
+  sql: { prefix: '--', suffix: '' },
+  lua: { prefix: '--', suffix: '' },
+
+  html: { prefix: '<!--', suffix: ' -->' },
+  xml:  { prefix: '<!--', suffix: ' -->' },
+
+  // CSS family has no line-comment form — /* … */ only.
+  css:  { prefix: '/*', suffix: ' */' },
+  scss: { prefix: '//', suffix: '' },
+  sass: { prefix: '//', suffix: '' },
+};
+
+/**
+ * Returns the line-comment syntax for a file, or null if the language isn't
+ * one SynDocs knows how to write comments for.
+ */
+export function getCommentSyntax(filePath: string): { prefix: string; suffix: string } | null {
+  const cfg = getLangConfig(filePath);
+  if (!cfg) return null;
+  return COMMENT_SYNTAX_BY_GRAMMAR[cfg.grammarId] ?? null;
+}

@@ -1072,11 +1072,87 @@ code, kbd, samp, pre {
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   font-family: var(--font-mono);
-  cursor: default;
+  cursor: pointer;
 }
 .line-num:hover {
   opacity: 1;
   color: var(--accent-hover);
+}
+
+/* ─── Line selection for "Add Doc" ─────────────────────────────────────────
+   Click a line number to select; click another with Shift to extend. The
+   selected range drives the floating Add Doc toolbar. */
+.code-line.line-selected {
+  background: var(--accent-glow) !important;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.code-line.line-selected .line-num {
+  opacity: 1;
+  color: var(--accent-hover);
+  font-weight: 700;
+}
+
+#add-doc-toolbar {
+  position: fixed;
+  z-index: 120;
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  box-shadow: var(--shadow);
+}
+#add-doc-toolbar.visible { display: flex; }
+#add-doc-toolbar .adt-label {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  padding: 0 6px 0 4px;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+#add-doc-toolbar .adt-btn {
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-dim);
+  padding: 5px 10px;
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 500;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+#add-doc-toolbar .adt-btn:hover {
+  background: var(--accent-glow);
+  border-color: var(--accent);
+  color: var(--text);
+}
+#add-doc-toolbar .adt-btn.primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: transparent;
+}
+#add-doc-toolbar .adt-btn.primary:hover { background: var(--accent-hover); }
+#add-doc-toolbar .adt-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 6px;
+  font-size: 11px;
+}
+#add-doc-toolbar .adt-close:hover { color: var(--text); }
+#add-doc-toolbar .adt-status {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  padding: 0 6px;
+  white-space: nowrap;
 }
 .line-content {
   flex: 1;

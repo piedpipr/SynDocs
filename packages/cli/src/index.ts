@@ -124,7 +124,11 @@ async function main(): Promise<void> {
   // async warm-up the same way — see @syndocs/core's ast-scope.ts.
   // Commands that never touch source files (install/auth/graph-link/serve's
   // own request handling, etc.) skip this entirely so they stay instant.
-  const COMMANDS_NEEDING_TOKENIZER = new Set(['init', 'check', 'update', 'prune', 'tree', 'lint-embeds']);
+  // 'serve' is included because the Web UI's "Add Doc" action writes new
+  // @synd markers into source files and then re-parses that file in-process
+  // (see addAnnotationToSource in commands/serve.ts), which needs the same
+  // tokenizer + AST warm-up that the CLI annotation commands do.
+  const COMMANDS_NEEDING_TOKENIZER = new Set(['init', 'check', 'update', 'prune', 'tree', 'lint-embeds', 'serve']);
   if (COMMANDS_NEEDING_TOKENIZER.has(parsed.command)) {
     try {
       await initTokenizer(getAllConfiguredGrammarIds());

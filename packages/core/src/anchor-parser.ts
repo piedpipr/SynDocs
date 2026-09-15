@@ -29,6 +29,22 @@ const DECLARATION_PATTERNS: Array<{ re: RegExp; kind: string; nameGroup: number 
 
 const ANCHOR_RE = /@(?:syndocs|synd)(?:\s*:\s*(\S+))?/;
 
+/**
+ * Explicit block-end marker: `@endsynd`.
+ *
+ * Normally a `@synd` annotation's scope is resolved automatically (via
+ * tree-sitter, falling back to regex) to the enclosing/following code
+ * element. `@endsynd` lets the range be stated explicitly instead — the
+ * annotation scopes from the line after its `@synd` marker up to the line
+ * before the matching `@endsynd`. This is what the Web UI's "Add Doc
+ * (Block)" action emits when the user selects an arbitrary span of lines
+ * that may not correspond to a single AST node.
+ *
+ * Matched before ANCHOR_RE would see it, since "@endsynd" doesn't contain
+ * "@synd" as a prefix-aligned match but we check it explicitly for clarity.
+ */
+const END_ANCHOR_RE = /@endsynd\b/;
+
 export interface ParseAnchorsOptions {
   /** Repo-relative or absolute path of the file being parsed (currently informational only; kept for forward-compatibility with future path-sensitive resolution). */
   filePath?: string;
@@ -85,7 +101,32 @@ export function parseAnchors(
     spans = scanCommentsFallback(lines);
   }
 
+  // Pre-scan for explicit block-end markers so a `@synd` annotation can look
+  // ahead for its matching `@endsynd` and use that as an explicit scope end
+  // instead of AST/regex-inferred boundaries.
+  const endMarkerLines: number[] = [];
+  const anchorSpanLines: number[] = [];
   for (const span of spans) {
+    if (END_ANCHOR_RE.test(span.text)) endMarkerLines.push(span.startLine);
+    else if (ANCHOR_RE.test(span.text)) anchorSpanLines.push(span.startLine);
+  }
+  /**
+   * The `@endsynd` that belongs to the annotation starting at `line`: the
+   * first end marker after it, but only if no *other* `@synd` annotation
+   * appears in between (otherwise that end marker belongs to the later
+   * annotation, not this one).
+   */
+  const matchingEndMarker = (line: number): number | undefined => {
+    const end = endMarkerLines.find(l => l > line);
+    if (end === undefined) return undefined;
+    const interveningAnchor = anchorSpanLines.find(l => l > line && l < end);
+    return interveningAnchor === undefined ? end : undefined;
+  };
+
+  for (const span of spans) {
+    // An `@endsynd` marker is a delimiter, not an annotation of its own.
+    if (END_ANCHOR_RE.test(span.text)) continue;
+
     const anchorMatch = span.text.match(ANCHOR_RE);
     if (!anchorMatch) continue;
 
@@ -105,6 +146,17 @@ export function parseAnchors(
         } else {
           // Auto-scoped micro-doc: scan the line(s) after the comment block for a code element
           const scope = resolveScopeBoundaries(content, lines, langConfig, span.endLine, false);
+
+          // An explicit `@endsynd` below this marker overrides the inferred
+          // scope end entirely, letting the user document an arbitrary span
+          // of lines that need not line up with a single AST node. Scope
+          // indices are 0-based with an exclusive end (see
+          // extractMicroDocCode), so the `@endsynd` line index is itself the
+          // correct exclusive end — the documented range is the lines
+          // strictly between the two markers.
+          const explicitEnd = matchingEndMarker(span.endLine);
+          const useExplicit = explicitEnd !== undefined;
+
           const slug = scope
             ? generateUniqueSlug(toKebabSlug(scope.name), seenLabels)
             : generateUniqueSlug(`block-L${i + 1}`, seenLabels);
@@ -115,10 +167,10 @@ export function parseAnchors(
             label: slug,
             lineIndex: i,
             autoScoped: true,
-            elementKind: scope?.kind,
-            elementName: scope?.name,
-            scopeStartLine: scope?.startLine,
-            scopeEndLine: scope?.endLine,
+            elementKind: useExplicit ? (scope?.kind ?? 'block') : scope?.kind,
+            elementName: useExplicit ? (scope?.name ?? slug) : scope?.name,
+            scopeStartLine: useExplicit ? span.endLine + 1 : scope?.startLine,
+            scopeEndLine: useExplicit ? explicitEnd : scope?.endLine,
           });
         }
       } else {

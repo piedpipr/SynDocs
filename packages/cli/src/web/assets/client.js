@@ -49,6 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupAuthModal();
   setupWindowResize();
   setupGlobalClickClose();
+  setupLineSelectionHandlers();
 
   const lastDoc = localStorage.getItem('syndocs_last_doc');
   if (lastDoc && DATA.docs[lastDoc]) {
@@ -425,12 +426,37 @@ function ensureChildrenBuilt(childrenContainer) {
   }
 }
 
+// VSCode-style "compact folders": a chain of directories that each contain
+// nothing but a single subdirectory (e.g. app > template > user, where
+// "app" and "template" have no other siblings) collapses into one row
+// labeled "app/template/user" instead of three nested rows. Purely a
+// display transform — the underlying node/children data is untouched, so
+// lazy-building, search filtering, and active-doc highlighting all keep
+// working against the real (uncompressed) tree.
+function compressDirChain(node) {
+  let current = node;
+  const nameParts = [node.name];
+  while (
+    current.type === 'dir' &&
+    current.children &&
+    current.children.length === 1 &&
+    current.children[0].type === 'dir'
+  ) {
+    current = current.children[0];
+    nameParts.push(current.name);
+  }
+  return { effectiveNode: current, displayName: nameParts.join('/') };
+}
+
 function buildDomTree(node, filter = '', depth = 0) {
+  const isDir = node.type === 'dir';
+  const { effectiveNode, displayName } = isDir ? compressDirChain(node) : { effectiveNode: node, displayName: node.name };
+
   const el = document.createElement('div');
   el.className = 'tree-node';
-  const hasChildren = Boolean(node.children && node.children.length > 0);
+  const hasChildren = Boolean(effectiveNode.children && effectiveNode.children.length > 0);
   const row = document.createElement('div');
-  row.className = 'tree-row' + (currentDocId === node.path ? ' active' : '');
+  row.className = 'tree-row' + (currentDocId === effectiveNode.path ? ' active' : '');
   row.setAttribute('role', 'treeitem');
 
   if (filter && !nodeMatchesFilter(node, filter)) el.style.display = 'none';
@@ -445,7 +471,7 @@ function buildDomTree(node, filter = '', depth = 0) {
   if (hasChildren) {
     childrenContainer = document.createElement('div');
     childrenContainer.className = 'tree-children' + (startCollapsed ? ' collapsed' : '');
-    lazyChildData.set(childrenContainer, { node, filter, depth, built: false });
+    lazyChildData.set(childrenContainer, { node: effectiveNode, filter, depth, built: false });
   }
 
   if (hasChildren) {
@@ -482,8 +508,8 @@ function buildDomTree(node, filter = '', depth = 0) {
 
   const label = document.createElement('span');
   label.className = 'tree-label';
-  label.textContent = node.targetLabel ? '#' + node.targetLabel : node.name;
-  label.title = node.path || node.name;
+  label.textContent = node.targetLabel ? '#' + node.targetLabel : displayName;
+  label.title = effectiveNode.path || displayName;
   row.appendChild(label);
 
   if (node.status && node.status !== 'none') {
@@ -664,7 +690,7 @@ function renderUndocumentedFile(id, fileData) {
     hl = escapeHtml(fileData.content);
   }
   codeEl.innerHTML = hl.split('\n').map((l, i) =>
-    '<div class="code-line" id="code-line-' + (i + 1) + '"><span class="line-num">' + (i + 1) + '</span><span class="line-content">' + (l || ' ') + '</span></div>'
+    '<div class="code-line" id="code-line-' + (i + 1) + '"><span class="line-num" onclick="onLineNumClick(event, ' + (i + 1) + ')" title="Click to select \u00b7 Shift-click to extend">' + (i + 1) + '</span><span class="line-content">' + (l || ' ') + '</span></div>'
   ).join('');
   pre.appendChild(codeEl);
   viewerBox.appendChild(pre);
@@ -727,6 +753,9 @@ function renderDocContent(doc, id) {
   codePane.innerHTML = '';
   docsPane.innerHTML = '';
   currentMicrodocs = {};
+  // The old line elements are about to be destroyed, so drop any pending
+  // "Add Doc" selection pointing at them.
+  clearLineSelection();
 
   stopThreadLoop();
   allThreadSpans = [];
@@ -985,7 +1014,7 @@ function buildHighlightedCodeHtml(code, tokens, language, microdocRegistry) {
   const lines = annotated.split('\n');
   return lines.map((lHtml, idx) => {
     const lNum = idx + 1;
-    return '<div class="code-line" id="code-line-' + lNum + '"><span class="line-num">' + lNum + '</span><span class="line-content">' + (lHtml || ' ') + '</span></div>';
+    return '<div class="code-line" id="code-line-' + lNum + '"><span class="line-num" onclick="onLineNumClick(event, ' + lNum + ')" title="Click to select \u00b7 Shift-click to extend">' + lNum + '</span><span class="line-content">' + (lHtml || ' ') + '</span></div>';
   }).join('');
 }
 
@@ -1084,6 +1113,188 @@ function jumpToCodeLine(lineNum) {
     const viewer = document.querySelector('.code-viewer-container');
     if (viewer) viewer.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ─── "Add Doc": select source lines and insert a @synd annotation ────────────
+//
+// Clicking a line number selects that line; shift-clicking another extends
+// the range. The floating toolbar then writes a marker into the real source
+// file via /api/annotation/add — the server only ever inserts comment lines
+// (or appends a trailing comment), never rewriting existing code.
+//
+//   single line  -> "Add Doc"          => trailing `// @synd` on that line
+//   multi-line   -> "Add Doc"          => `// @synd` above the first line
+//   multi-line   -> "Add Doc (Block)"  => same, plus `// @endsynd` after the
+//                                          last line for an explicit range
+
+let selAnchorLine = null;   // first clicked line (1-based)
+let selFocusLine = null;    // shift-clicked line (1-based)
+
+function getSelectedRange() {
+  if (selAnchorLine === null) return null;
+  const a = selAnchorLine;
+  const b = selFocusLine === null ? selAnchorLine : selFocusLine;
+  return { start: Math.min(a, b), end: Math.max(a, b) };
+}
+
+function onLineNumClick(e, lineNum) {
+  e.stopPropagation();
+  if (e.shiftKey && selAnchorLine !== null) {
+    selFocusLine = lineNum;
+  } else if (selAnchorLine === lineNum && selFocusLine === null) {
+    clearLineSelection();   // clicking the same single line again deselects
+    return;
+  } else {
+    selAnchorLine = lineNum;
+    selFocusLine = null;
+  }
+  renderLineSelection();
+}
+
+function renderLineSelection() {
+  const range = getSelectedRange();
+  document.querySelectorAll('.code-line.line-selected').forEach(el => el.classList.remove('line-selected'));
+  const toolbar = document.getElementById('add-doc-toolbar');
+  if (!range) {
+    toolbar.classList.remove('visible');
+    return;
+  }
+
+  let lastEl = null;
+  for (let n = range.start; n <= range.end; n++) {
+    const el = document.getElementById('code-line-' + n);
+    if (el) { el.classList.add('line-selected'); lastEl = el; }
+  }
+
+  const multi = range.end > range.start;
+  document.getElementById('adt-label').textContent = multi
+    ? 'Lines ' + range.start + '\u2013' + range.end
+    : 'Line ' + range.start;
+  document.getElementById('adt-status').textContent = '';
+  // "Add Doc (Block)" only makes sense for a real multi-line range.
+  document.getElementById('adt-add-block').style.display = multi ? 'inline-flex' : 'none';
+
+  toolbar.classList.add('visible');
+  positionAddDocToolbar(lastEl);
+}
+
+function positionAddDocToolbar(anchorEl) {
+  const toolbar = document.getElementById('add-doc-toolbar');
+  if (!anchorEl) return;
+  const r = anchorEl.getBoundingClientRect();
+  const tw = toolbar.offsetWidth || 320;
+  const th = toolbar.offsetHeight || 40;
+  let top = r.bottom + 6;
+  if (top + th > window.innerHeight - 8) top = Math.max(8, r.top - th - 6);
+  let left = r.left + 60;
+  if (left + tw > window.innerWidth - 8) left = Math.max(8, window.innerWidth - tw - 8);
+  toolbar.style.top = top + 'px';
+  toolbar.style.left = left + 'px';
+}
+
+function clearLineSelection() {
+  selAnchorLine = null;
+  selFocusLine = null;
+  document.querySelectorAll('.code-line.line-selected').forEach(el => el.classList.remove('line-selected'));
+  const toolbar = document.getElementById('add-doc-toolbar');
+  if (toolbar) toolbar.classList.remove('visible');
+}
+
+function submitAddDoc(kind) {
+  const range = getSelectedRange();
+  if (!range || !currentDocId) return;
+
+  if (!authToken) {
+    document.getElementById('auth-modal').style.display = 'flex';
+    setTimeout(() => document.getElementById('auth-code-input').focus(), 50);
+    return;
+  }
+
+  const multi = range.end > range.start;
+  // Single line always gets the inline (trailing) marker; multi-line gets
+  // an above-marker, plus an explicit @endsynd when "Block" was chosen.
+  const mode = !multi ? 'inline' : (kind === 'block' ? 'block' : 'above');
+
+  const status = document.getElementById('adt-status');
+  status.textContent = 'Adding\u2026';
+  document.getElementById('adt-add').disabled = true;
+  document.getElementById('adt-add-block').disabled = true;
+
+  // The source file path: for a normal doc this is doc.sourceFile, which
+  // equals currentDocId for file-level docs.
+  const doc = DATA.docs[currentDocId];
+  const filePath = (doc && doc.sourceFile) || currentDocId;
+
+  fetch('/api/annotation/add', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
+    body: JSON.stringify({ path: filePath, startLine: range.start, endLine: range.end, mode })
+  })
+  .then(r => r.json())
+  .then(res => {
+    document.getElementById('adt-add').disabled = false;
+    document.getElementById('adt-add-block').disabled = false;
+    if (!res.ok) {
+      status.textContent = res.error || 'Failed';
+      return;
+    }
+    status.textContent = 'Added';
+    const newLabel = (res.newLabels && res.newLabels[0]) || null;
+    // Pull fresh data (the server already rebuilt it), re-render, then jump
+    // straight into editing the annotation that was just created.
+    fetch('/api/data')
+      .then(r => r.json())
+      .then(d => {
+        Object.assign(DATA, d);
+        clearLineSelection();
+        renderStats();
+        renderSidebar();
+        openDoc(res.docId || currentDocId);
+        if (newLabel) setTimeout(() => focusMicrodocEditor(newLabel), 250);
+      })
+      .catch(() => { clearLineSelection(); });
+  })
+  .catch(() => {
+    document.getElementById('adt-add').disabled = false;
+    document.getElementById('adt-add-block').disabled = false;
+    status.textContent = 'Failed';
+  });
+}
+
+/** Scroll to a freshly created annotation card and open its notes editor. */
+function focusMicrodocEditor(label) {
+  const card = document.querySelector('.microdoc-card[data-label="' + CSS.escape(label) + '"]');
+  if (!card) return;
+  card.classList.add('expanded');
+  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  const editBtn = card.querySelector('.mc-edit-btn');
+  if (editBtn) toggleMicrodocEdit(editBtn);
+}
+
+function setupLineSelectionHandlers() {
+  // Escape cancels a pending selection.
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && getSelectedRange()) clearLineSelection();
+  });
+
+  // The toolbar is position:fixed and anchored to a line element, so it has
+  // to follow that line when the code pane scrolls (or the window resizes).
+  // Coalesced to one reposition per animation frame.
+  let rafPending = false;
+  const reposition = () => {
+    if (rafPending) return;
+    rafPending = true;
+    requestAnimationFrame(() => {
+      rafPending = false;
+      const range = getSelectedRange();
+      if (!range) return;
+      const el = document.getElementById('code-line-' + range.end);
+      if (el) positionAddDocToolbar(el);
+    });
+  };
+  document.addEventListener('scroll', reposition, true);
+  window.addEventListener('resize', reposition);
 }
 
 function attachTokenListeners(codeEl, currentId) {

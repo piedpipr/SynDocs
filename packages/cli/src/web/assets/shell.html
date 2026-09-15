@@ -282,6 +282,21 @@
 <!-- Edge hover zones for split-mode auto-hiding panels (outside #app's grid on purpose,
      so they can never interfere with the grid's implicit auto-placement of header/
      sidebar/content-panel/graph-panel). -->
+<!-- Floating "Add Doc" toolbar — appears when source lines are selected -->
+<div id="add-doc-toolbar" role="toolbar" aria-label="Add documentation to selected lines">
+  <span class="adt-label" id="adt-label"></span>
+  <span class="adt-status" id="adt-status"></span>
+  <button class="adt-btn primary" id="adt-add" onclick="submitAddDoc('auto')">
+    <i class="fa-solid fa-plus"></i> Add Doc
+  </button>
+  <button class="adt-btn" id="adt-add-block" onclick="submitAddDoc('block')">
+    <i class="fa-solid fa-file-code"></i> Add Doc (Block)
+  </button>
+  <button class="adt-close" onclick="clearLineSelection()" title="Cancel selection">
+    <i class="fa-solid fa-xmark"></i>
+  </button>
+</div>
+
 <div id="edge-hint-left" aria-hidden="true"></div>
 <div id="edge-hint-right" aria-hidden="true"></div>
 

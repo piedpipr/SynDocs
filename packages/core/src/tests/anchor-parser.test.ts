@@ -370,3 +370,72 @@ test('extractCommentSpans throws a clear error if called before initTokenizer (s
     require('../tokenizer').extractCommentSpans('code', 'not-a-real-grammar-id');
   }, /Unknown grammar id/);
 });
+
+// ─── Explicit block-end markers (@endsynd) ─────────────────────────────────
+//
+// `@endsynd` lets an annotation declare an explicit line range instead of
+// relying on AST/regex scope inference. This is what the Web UI's "Add Doc
+// (Block)" action emits when the user selects an arbitrary span of lines
+// that doesn't correspond to a single AST node (e.g. two sibling
+// declarations). Scope indices are 0-based with an exclusive end, so the
+// documented range is the lines strictly between the two markers.
+
+test('@endsynd sets an explicit scope spanning multiple sibling declarations', () => {
+  const content = [
+    'export const GAMMA = 42;',   // 0
+    '',                           // 1
+    '// @synd',                   // 2
+    'export const A = 1;',        // 3
+    'export const B = 2;',        // 4
+    '// @endsynd',                // 5
+  ].join('\n');
+
+  const found = anchors(content, 'x.ts');
+  const micro = found.find(a => a.kind === 'micro');
+  assert.ok(micro, 'expected a micro anchor');
+  // Range is the lines between the markers: indices 3..4, exclusive end 5.
+  assert.equal(micro!.scopeStartLine, 3);
+  assert.equal(micro!.scopeEndLine, 5);
+});
+
+test('@endsynd marker is a delimiter, not an annotation of its own', () => {
+  // Real code first, so the bare @synd below is a micro anchor rather than
+  // being claimed as the file-level (whole-file) anchor.
+  const content = [
+    'export function existing() {}',
+    '',
+    '// @synd',
+    'const a = 1;',
+    '// @endsynd',
+  ].join('\n');
+
+  const found = anchors(content, 'x.ts');
+  // Exactly one anchor — the @endsynd must not produce a second micro-doc.
+  assert.equal(found.length, 1);
+  assert.equal(found[0].kind, 'micro');
+});
+
+test('an @endsynd belonging to a later annotation does not capture an earlier one', () => {
+  const content = [
+    'export function head() {}', // 0  real code first, so neither @synd below
+    '',                          // 1  gets claimed as the whole-file anchor
+    '// @synd',                  // 2  -> scopes via AST, not the far @endsynd
+    'function first() {}',       // 3
+    '',                          // 4
+    '// @synd',                  // 5  -> owns the @endsynd below
+    'const x = 1;',              // 6
+    '// @endsynd',               // 7
+  ].join('\n');
+
+  const found = anchors(content, 'x.ts');
+  const micros = found.filter(a => a.kind === 'micro');
+  assert.equal(micros.length, 2);
+  // The first annotation must NOT swallow everything up to line 5 — an
+  // intervening @synd means that end marker belongs to the second one.
+  assert.ok(
+    (micros[0].scopeEndLine ?? 0) < 7,
+    `first anchor should not extend to the later @endsynd (got ${micros[0].scopeEndLine})`,
+  );
+  assert.equal(micros[1].scopeStartLine, 6);
+  assert.equal(micros[1].scopeEndLine, 7);
+});

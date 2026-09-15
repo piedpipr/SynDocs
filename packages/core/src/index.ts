@@ -17,7 +17,7 @@ export type { CommentSpan } from './tokenizer';
 export { computeHash, normalise } from './hash';
 
 // Language detection
-export { getCodeBlockLang, getLangConfig, getAllConfiguredGrammarIds } from './languages';
+export { getCodeBlockLang, getLangConfig, getAllConfiguredGrammarIds, getCommentSyntax } from './languages';
 
 // Comment tokenization (see tokenizer.ts for why this replaced regex-based
 // comment scanning). `initTokenizer` must be awaited once before any
